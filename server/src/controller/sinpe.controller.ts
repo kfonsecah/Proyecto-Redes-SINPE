@@ -72,7 +72,12 @@ export const handleSinpeTransfer = async (req: Request, res: Response) => {
       description
     );
 
-    res.status(201).json({ message: "Transferencia realizada.", transfer });
+    // Devolver formato ACK para consistencia
+    res.status(200).json({
+      transaction_id,
+      status: "ACK",
+      message: "transferencia procesada"
+    });
   } catch (error: any) {
     res
       .status(500)

@@ -73,16 +73,45 @@ const SinpeTransferSummary: React.FC<Props> = ({
 
       const finalPayload = { ...payload, hmac_md5 };
 
-      await fetch(`${API_URL}/sinpe-movil`, {
+      const sinpeRes = await fetch(`${API_URL}/sinpe-movil`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(finalPayload),
       });
 
-      onConfirm();
-    } catch (error) {
+      if (!sinpeRes.ok) {
+        throw new Error("Error en la respuesta del servidor");
+      }
+
+      const result = await sinpeRes.json();
+
+      console.log("✅ Transferencia SINPE enviada:", finalPayload);
+      console.log("📬 Respuesta del servidor:", result);
+
+      // Validar que recibimos ACK del servidor para SINPE Móvil
+      if (result.status === "ACK" && result.transaction_id === finalPayload.transaction_id) {
+        console.log("✅ ACK SINPE confirmado - Transferencia exitosa");
+        localStorage.removeItem("pendingSinpeTransfer");
+        onConfirm();
+      } else {
+        console.error("❌ No se recibió ACK válido para SINPE:", result);
+        throw new Error("La transferencia SINPE no fue confirmada por el banco destino");
+      }
+
+    } catch (error: any) {
       console.error("❌ Error al enviar SINPE:", error);
-      alert("No se pudo completar la transferencia.");
+
+      // Extraer mensaje de error más específico
+      let errorMessage = "Error desconocido";
+
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      // Mostrar error específico al usuario
+      alert(`❌ No se pudo completar la transferencia SINPE:\n\n${errorMessage}\n\nTus fondos no han sido descontados.`);
     }
   };
 

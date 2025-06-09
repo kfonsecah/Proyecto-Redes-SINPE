@@ -84,7 +84,7 @@ export const sendSinpeTransfer = async (
 
   console.log(`🏦 Tipo de transferencia: ${isInternalTransfer ? 'Interna' : 'Externa'} (${LOCAL_BANK_CODE} → ${receiverBankCode})`);
 
-  // 3. Buscar si el emisor está en phone_links para descontar fondos
+  // 3. Buscar si el emisor está en phone_links y validar fondos
   const senderLink = await prismaSinpe.phone_links.findUnique({
     where: { phone: senderPhone },
   });
@@ -108,13 +108,8 @@ export const sendSinpeTransfer = async (
       throw new Error(`Fondos insuficientes en la cuenta origen. Balance: ${currentBalance} ${currency}, Requerido: ${amount} ${currency}`);
     }
 
-    // Descontar fondos del emisor
-    await prismaSinpe.accounts.update({
-      where: { id: fromAccount.id },
-      data: { balance: { decrement: new Decimal(amount) } },
-    });
-
-    console.log(`💸 Fondos descontados de la cuenta ${fromAccount.number}: ${amount} ${currency}`);
+    // NO descontar fondos aquí - solo validar que hay suficientes
+    console.log(`✅ Fondos suficientes para la transferencia: ${amount} ${currency}`);
   }
 
   // 4. Solo acreditar si es transferencia interna
@@ -136,6 +131,15 @@ export const sendSinpeTransfer = async (
 
     if (!toAccount) {
       throw new Error("La cuenta destino no existe.");
+    }
+
+    // AHORA SÍ descontar fondos del emisor (transferencia interna)
+    if (fromAccount) {
+      await prismaSinpe.accounts.update({
+        where: { id: fromAccount.id },
+        data: { balance: { decrement: new Decimal(amount) } },
+      });
+      console.log(`💸 Fondos descontados de la cuenta ${fromAccount.number}: ${amount} ${currency}`);
     }
 
     // Acreditar fondos al receptor
@@ -226,8 +230,19 @@ export const sendSinpeTransfer = async (
       const result = await response.json();
 
       // Validar que recibimos el ACK esperado para SINPE Móvil
-      if (result.status === "ACK" && result.transaction_id === payload_firmado.transaction_id) {
+      const resultData = result as { status: string; transaction_id: string };
+      if (resultData.status === "ACK" && resultData.transaction_id === payload_firmado.transaction_id) {
         console.log(`✅ ACK SINPE Móvil recibido del banco ${receiverBankCode}:`, result);
+
+        // SOLO AHORA descontar fondos del emisor (después de confirmar ACK)
+        if (fromAccount) {
+          await prismaSinpe.accounts.update({
+            where: { id: fromAccount.id },
+            data: { balance: { decrement: new Decimal(amount) } },
+          });
+          console.log(`💸 Fondos descontados de la cuenta ${fromAccount.number}: ${amount} ${currency}`);
+        }
+
       } else {
         console.log(`⚠️ Respuesta SINPE inesperada del banco ${receiverBankCode}:`, result);
         throw new Error(`Respuesta inválida del banco ${receiverBankCode}. Esperaba ACK pero recibí: ${JSON.stringify(result)}`);
@@ -252,14 +267,8 @@ export const sendSinpeTransfer = async (
     } catch (error) {
       console.error("❌ Error enviando transferencia externa:", error);
 
-      // Revertir el débito si hay error
-      if (fromAccount) {
-        await prismaSinpe.accounts.update({
-          where: { id: fromAccount.id },
-          data: { balance: { increment: new Decimal(amount) } },
-        });
-        console.log("🔄 Débito revertido debido a error en transferencia externa");
-      }
+      // Ya no necesitamos revertir porque nunca descontamos
+      // Los fondos solo se descontaron si llegamos hasta recibir el ACK
 
       throw error;
     }

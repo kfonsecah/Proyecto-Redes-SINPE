@@ -54,12 +54,12 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
       transaction_id: uuidv4(),
       sender: {
         account_number: fromAccount,
-        bank_code: bankFromTransfer || "quien envia", // Asegúrate que user tenga bank_code
+        bank_code: bankFromTransfer || "quien envia",
         name: user.name || "Desconocido",
       },
       receiver: {
         account_number: toAccount,
-        bank_code: bankToTransfer || "quien recibe", // Extrae NBCR, BNCR, etc
+        bank_code: bankToTransfer || "quien recibe",
         name: toName,
       },
       amount: {
@@ -91,16 +91,39 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
         body: JSON.stringify(finalPayload),
       });
 
+      if (!trxRes.ok) {
+        throw new Error("Error en la respuesta del servidor");
+      }
+
       const result = await trxRes.json();
 
       console.log("✅ Transacción enviada:", finalPayload);
       console.log("📬 Respuesta del servidor:", result);
 
-      localStorage.removeItem("pendingTransfer");
-      onConfirm();
-    } catch (error) {
+      // Validar que recibimos ACK del servidor
+      if (result.status === "ACK" && result.transaction_id === finalPayload.transaction_id) {
+        console.log("✅ ACK confirmado - Transferencia exitosa");
+        localStorage.removeItem("pendingTransfer");
+        onConfirm();
+      } else {
+        console.error("❌ No se recibió ACK válido:", result);
+        throw new Error("La transferencia no fue confirmada por el banco destino");
+      }
+
+    } catch (error: any) {
       console.error("❌ Error al confirmar transferencia:", error);
-      alert("No se pudo completar la transferencia.");
+
+      // Extraer mensaje de error más específico
+      let errorMessage = "Error desconocido";
+
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      // Mostrar error específico al usuario
+      alert(`❌ No se pudo completar la transferencia:\n\n${errorMessage}\n\nVerifica que todos los datos sean correctos.`);
     }
   };
 
