@@ -224,7 +224,14 @@ export const sendSinpeTransfer = async (
       }
 
       const result = await response.json();
-      console.log(`✅ Transferencia externa enviada exitosamente:`, result);
+
+      // Validar que recibimos el ACK esperado para SINPE Móvil
+      if (result.status === "ACK" && result.transaction_id === payload_firmado.transaction_id) {
+        console.log(`✅ ACK SINPE Móvil recibido del banco ${receiverBankCode}:`, result);
+      } else {
+        console.log(`⚠️ Respuesta SINPE inesperada del banco ${receiverBankCode}:`, result);
+        throw new Error(`Respuesta inválida del banco ${receiverBankCode}. Esperaba ACK pero recibí: ${JSON.stringify(result)}`);
+      }
 
       return {
         id: Date.now(),
@@ -238,7 +245,8 @@ export const sendSinpeTransfer = async (
         receiver_bank: receiverBankCode,
         receiver_phone: receiverPhone,
         receiver_name: subscription.sinpe_client_name,
-        external_result: result
+        external_result: result,
+        ack_received: true // Indicador de que recibimos ACK
       };
 
     } catch (error) {

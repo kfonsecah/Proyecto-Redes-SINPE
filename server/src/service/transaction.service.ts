@@ -268,7 +268,16 @@ const sendToExternalBank = async (
     throw new Error(`Error del banco ${bankCode}: ${response.status} - ${errorText}`);
   }
 
-  return await response.json();
+  const result = await response.json();
+
+  // Validar que recibimos el ACK esperado
+  if (result.status === "ACK" && result.transaction_id === transaction.transaction_id) {
+    console.log(`✅ ACK recibido del banco ${bankCode}:`, result);
+    return result;
+  } else {
+    console.log(`⚠️ Respuesta inesperada del banco ${bankCode}:`, result);
+    throw new Error(`Respuesta inválida del banco ${bankCode}. Esperaba ACK pero recibí: ${JSON.stringify(result)}`);
+  }
 };
 
 export const routeTransfer = async (transaction: TransferPayload) => {

@@ -47,8 +47,8 @@ export const receiveTransfer = async (req: Request, res: Response) => {
     // ¿Existe la cuenta del remitente? (solo si es transferencia interna)
     const fromAccount = sender.account_number
       ? await prisma.accounts.findUnique({
-          where: { number: sender.account_number },
-        })
+        where: { number: sender.account_number },
+      })
       : null;
 
     if (fromAccount) {
@@ -59,7 +59,12 @@ export const receiveTransfer = async (req: Request, res: Response) => {
       await createExternalCredit(transaction);
     }
 
-    return res.status(200).json({ success: true });
+    // Devolver el formato específico que requiere el amigo
+    return res.status(200).json({
+      transaction_id: transaction.transaction_id,
+      status: "ACK",
+      message: "transferencia procesada"
+    });
   } catch (error: any) {
     console.error("❌ Error procesando transferencia:", error.message);
     return res.status(500).json({ error: error.message });

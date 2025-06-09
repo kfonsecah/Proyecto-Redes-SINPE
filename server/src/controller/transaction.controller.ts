@@ -57,7 +57,12 @@ export const receiveTransaction = async (req: Request, res: Response) => {
     transactionService.logTransaction(transaction);
     const result = await transactionService.routeTransfer(transaction);
 
-    res.status(200).json(result);
+    // Devolver el formato específico que requiere el amigo
+    res.status(200).json({
+      transaction_id: transaction.transaction_id,
+      status: "ACK",
+      message: "transferencia procesada"
+    });
   } catch (err: any) {
     console.error("❌ Error procesando transacción:", err.message);
     res.status(400).json({ error: err.message });

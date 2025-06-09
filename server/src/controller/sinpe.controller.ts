@@ -149,12 +149,11 @@ export const receiveSinpeMovilTransfer = async (req: Request, res: Response) => 
 
     console.log("✅ Transferencia SINPE Móvil entrante procesada exitosamente");
 
-    // Enviar respuesta de confirmación
+    // Devolver el formato específico que requiere el amigo
     res.status(200).json({
-      success: true,
-      message: "Transferencia SINPE Móvil recibida y procesada correctamente.",
       transaction_id,
-      result
+      status: "ACK",
+      message: "transferencia procesada"
     });
 
   } catch (error: any) {
