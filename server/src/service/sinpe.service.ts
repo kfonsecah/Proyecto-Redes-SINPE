@@ -100,9 +100,20 @@ export const sendSinpeTransfer = async (
       throw new Error("La cuenta origen vinculada al número remitente no existe.");
     }
 
-    // Convertir balance a número para comparación correcta
-    const currentBalance = Number(fromAccount.balance);
-    console.log(`💰 Balance actual: ${currentBalance} ${currency}, Monto a enviar: ${amount}`);
+    // Debug: Ver qué tipos de datos estamos manejando
+    console.log(`🔍 DEBUG - Balance raw:`, fromAccount.balance);
+    console.log(`🔍 DEBUG - Balance type:`, typeof fromAccount.balance);
+    console.log(`🔍 DEBUG - Amount raw:`, amount);
+    console.log(`🔍 DEBUG - Amount type:`, typeof amount);
+
+    // Convertir balance usando Decimal para mayor precisión
+    const currentBalance = fromAccount.balance instanceof Decimal
+      ? fromAccount.balance.toNumber()
+      : Number(fromAccount.balance);
+
+    console.log(`💰 Balance actual: ${currentBalance} ${currency}, Monto a enviar: ${amount} ${currency}`);
+    console.log(`🔍 DEBUG - Balance convertido:`, currentBalance);
+    console.log(`🔍 DEBUG - Comparación: ${currentBalance} < ${amount} = ${currentBalance < amount}`);
 
     if (currentBalance < amount) {
       throw new Error(`Fondos insuficientes en la cuenta origen. Balance: ${currentBalance} ${currency}, Requerido: ${amount} ${currency}`);

@@ -41,9 +41,23 @@ export const handleSinpeTransfer = async (req: Request, res: Response) => {
       hmac_md5,
     } = req.body;
 
+    // Debug: Ver qué tipos de datos estamos recibiendo
+    console.log(`🔍 DEBUG Controller - amount object:`, amount);
+    console.log(`🔍 DEBUG Controller - amount.value:`, amount?.value);
+    console.log(`🔍 DEBUG Controller - amount.value type:`, typeof amount?.value);
+
     // Validar campos obligatorios
     if (!sender?.phone || !receiver?.phone || !amount?.value || !hmac_md5) {
       return res.status(400).json({ error: "Faltan datos en la solicitud." });
+    }
+
+    // Convertir amount.value a número si viene como string
+    const amountValue = typeof amount.value === 'string' ? parseFloat(amount.value) : amount.value;
+    console.log(`🔍 DEBUG Controller - amount convertido:`, amountValue);
+    console.log(`🔍 DEBUG Controller - amount convertido type:`, typeof amountValue);
+
+    if (isNaN(amountValue) || amountValue <= 0) {
+      return res.status(400).json({ error: "El monto debe ser un número válido mayor a 0." });
     }
 
     // Validar HMAC
@@ -54,7 +68,7 @@ export const handleSinpeTransfer = async (req: Request, res: Response) => {
         transaction_id,
         sender,
         receiver,
-        amount,
+        amount: { ...amount, value: amountValue }, // Usar el monto convertido
         description,
       },
       hmac_md5
@@ -67,7 +81,7 @@ export const handleSinpeTransfer = async (req: Request, res: Response) => {
     const transfer = await sendSinpeTransfer(
       sender.phone,
       receiver.phone,
-      amount.value,
+      amountValue, // Usar el monto convertido
       amount.currency,
       description
     );
