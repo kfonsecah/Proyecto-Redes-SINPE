@@ -18,6 +18,8 @@ interface Props {
 
 const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
   const [transfer, setTransfer] = useState<TransferData | null>(data || null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const API_URL = import.meta.env.VITE_API_URL;
 
   useEffect(() => {
@@ -44,6 +46,9 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
   };
 
   const handleConfirm = async () => {
+    setIsLoading(true);
+    setError(null);
+
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     const bankToTransfer = localStorage.getItem("bankToTransfer");
     const bankFromTransfer = localStorage.getItem("bankFromTransfer");
@@ -77,6 +82,11 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
         body: JSON.stringify(payloadBase),
       });
 
+      if (!hmacRes.ok) {
+        const errorData = await hmacRes.json().catch(() => ({ error: "Error generando HMAC" }));
+        throw new Error(errorData.error || `Error HTTP ${hmacRes.status}`);
+      }
+
       const { hmac_md5 } = await hmacRes.json();
 
       const finalPayload = {
@@ -92,7 +102,8 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
       });
 
       if (!trxRes.ok) {
-        throw new Error("Error en la respuesta del servidor");
+        const errorData = await trxRes.json().catch(() => ({ error: "Error del servidor" }));
+        throw new Error(errorData.error || `Error HTTP ${trxRes.status}`);
       }
 
       const result = await trxRes.json();
@@ -100,7 +111,6 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
       console.log("✅ Transacción enviada:", finalPayload);
       console.log("📬 Respuesta del servidor:", result);
 
-      // Validar que recibimos ACK del servidor
       if (result.status === "ACK" && result.transaction_id === finalPayload.transaction_id) {
         console.log("✅ ACK confirmado - Transferencia exitosa");
         localStorage.removeItem("pendingTransfer");
@@ -112,18 +122,9 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
 
     } catch (error: any) {
       console.error("❌ Error al confirmar transferencia:", error);
-
-      // Extraer mensaje de error más específico
-      let errorMessage = "Error desconocido";
-
-      if (error.message) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }
-
-      // Mostrar error específico al usuario
-      alert(`❌ No se pudo completar la transferencia:\n\n${errorMessage}\n\nVerifica que todos los datos sean correctos.`);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -132,6 +133,28 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
       <h2 className="text-2xl font-bold text-blue-800 mb-6 text-center">
         Confirmar Transferencia
       </h2>
+
+      {/* Mostrar error si existe */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start">
+            <div className="text-red-500 text-2xl mr-3">⚠️</div>
+            <div>
+              <h3 className="text-red-800 font-semibold mb-2">Error en la transferencia</h3>
+              <p className="text-red-700">{error}</p>
+              <p className="text-red-600 text-sm mt-2">
+                ✅ Tus fondos están seguros y no han sido descontados.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="mt-3 text-red-600 hover:text-red-800 underline text-sm"
+          >
+            Cerrar error
+          </button>
+        </div>
+      )}
 
       <div className="space-y-4 text-base text-gray-800">
         <p>
@@ -153,14 +176,16 @@ const TransferSummary: React.FC<Props> = ({ data, onConfirm, onCancel }) => {
         <button
           onClick={onCancel}
           className="bg-gray-200 text-gray-700 font-semibold py-2 px-6 rounded-md hover:bg-gray-300 transition"
+          disabled={isLoading}
         >
           Cancelar
         </button>
         <button
           onClick={handleConfirm}
-          className="bg-blue-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-blue-700 transition"
+          disabled={isLoading}
+          className="bg-blue-600 text-white font-semibold py-2 px-6 rounded-md hover:bg-blue-700 transition disabled:bg-blue-400 disabled:cursor-not-allowed"
         >
-          Confirmar
+          {isLoading ? "Procesando..." : "Confirmar"}
         </button>
       </div>
     </div>
