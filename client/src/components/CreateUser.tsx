@@ -9,6 +9,7 @@ const CreateUser: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState("");
+  const [nationalId, setNationalId] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +23,7 @@ const CreateUser: React.FC = () => {
       const response = await fetch(`${API_URL}/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone, password }),
+        body: JSON.stringify({ name, email, phone, password, nationalId }),
       });
 
       const result = await response.json();
@@ -62,6 +63,17 @@ const CreateUser: React.FC = () => {
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
+            className="w-full border border-gray-300 px-3 py-2 rounded"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-gray-700 mb-1">Cedula de identidad</label>
+          <input
+            type="text"
+            required
+            value={nationalId}
+            onChange={(e) => setNationalId(e.target.value)}
             className="w-full border border-gray-300 px-3 py-2 rounded"
           />
         </div>

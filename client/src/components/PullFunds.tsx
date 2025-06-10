@@ -40,16 +40,6 @@ const PullFunds: React.FC = () => {
         return bankNames[bankCode] || `Banco ${bankCode}`;
     };
 
-    // Función para obtener la configuración del banco
-    const getBankConfig = (bankCode: string) => {
-        const bankConfigs: Record<string, { ip: string; puerto: string }> = {
-            "241": { ip: "192.168.4.10", puerto: "5050" },
-            "151": { ip: "192.168.4.11", puerto: "5051" },
-            "161": { ip: "192.168.4.12", puerto: "5052" }
-        };
-        return bankConfigs[bankCode];
-    };
-
     useEffect(() => {
         // Cargar cuentas del usuario
         const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -103,13 +93,6 @@ const PullFunds: React.FC = () => {
             return;
         }
 
-        const bankConfig = getBankConfig(externalBankCode);
-        if (!bankConfig) {
-            setMessage(`El banco ${externalBankName} no está disponible para pull funds`);
-            setMessageType("error");
-            return;
-        }
-
         setLoading(true);
         setMessage("");
 
@@ -122,10 +105,7 @@ const PullFunds: React.FC = () => {
                     cedula: cedula,
                     monto: Number(amount),
                     bancoDestino: {
-                        codigo: externalBankCode,
-                        nombre: externalBankName,
-                        ip: bankConfig.ip,
-                        puerto: bankConfig.puerto
+                        codigo: externalBankCode
                     },
                     localAccountNumber: localAccountNumber
                 }),
@@ -151,7 +131,6 @@ const PullFunds: React.FC = () => {
                 setMessageType("error");
             }
         } catch (error: any) {
-            console.error("Error en pull funds:", error);
             setMessage(`❌ Error de conexión: ${error.message}`);
             setMessageType("error");
         } finally {
@@ -190,8 +169,8 @@ const PullFunds: React.FC = () => {
                     {message && (
                         <motion.div
                             className={`mb-6 p-4 rounded-xl border ${messageType === "success"
-                                    ? "bg-green-50 border-green-200 text-green-700"
-                                    : "bg-red-50 border-red-200 text-red-700"
+                                ? "bg-green-50 border-green-200 text-green-700"
+                                : "bg-red-50 border-red-200 text-red-700"
                                 }`}
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -246,8 +225,8 @@ const PullFunds: React.FC = () => {
                             {isValidIban && (
                                 <motion.div
                                     className={`mt-3 p-3 rounded-xl border ${isExternalBank
-                                            ? "bg-blue-50 border-blue-200"
-                                            : "bg-orange-50 border-orange-200"
+                                        ? "bg-blue-50 border-blue-200"
+                                        : "bg-orange-50 border-orange-200"
                                         }`}
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
