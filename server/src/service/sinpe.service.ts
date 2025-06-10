@@ -259,6 +259,29 @@ export const sendSinpeTransfer = async (
       if (resultData.status === "ACK") {
         console.log(`✅ ACK SINPE Móvil recibido del banco ${receiverBankCode}:`, result);
 
+        // Crear o buscar cuenta del sistema para transferencias SINPE externas
+        const systemAccount = await prismaSinpe.accounts.findUnique({
+          where: { number: `SYS-SINPE-EXT-${receiverBankCode}` },
+        }) || await prismaSinpe.accounts.create({
+          data: {
+            number: `SYS-SINPE-EXT-${receiverBankCode}`,
+            currency: currency,
+            balance: new Decimal(999999999),
+          },
+        });
+
+        // Registrar la transferencia SINPE saliente en la tabla transfers
+        const transferRecord = await prismaSinpe.transfers.create({
+          data: {
+            from_account_id: fromAccount.id,
+            to_account_id: systemAccount.id,
+            amount: new Decimal(amount),
+            currency: currency,
+            status: "completed",
+            description: `SINPE to ${receiverBankCode}`.substring(0, 20),
+          },
+        });
+
         // SOLO AHORA descontar fondos del emisor (después de confirmar ACK)
         const transferAmountDecimal = new Decimal(amount);
         await prismaSinpe.accounts.update({
@@ -266,6 +289,23 @@ export const sendSinpeTransfer = async (
           data: { balance: { decrement: transferAmountDecimal } },
         });
         console.log(`💸 Fondos descontados de la cuenta ${fromAccount.number}: ${amount} ${currency}`);
+        console.log(`📝 Transferencia SINPE saliente registrada con ID: ${transferRecord.id}`);
+
+        return {
+          id: transferRecord.id,
+          from_account_id: fromAccount?.id,
+          to_account_id: systemAccount.id,
+          amount: new Decimal(amount),
+          currency,
+          description: comment ?? `Transferencia SINPE a ${receiverPhone} (${subscription?.sinpe_client_name})`,
+          status: "completed",
+          external_transfer: true,
+          receiver_bank: receiverBankCode,
+          receiver_phone: receiverPhone,
+          receiver_name: subscription?.sinpe_client_name,
+          external_result: result,
+          ack_received: true // Indicador de que recibimos ACK
+        };
 
       } else if (resultData.status === "NACK") {
         console.log(`❌ NACK SINPE Móvil recibido del banco ${receiverBankCode}:`, result);
@@ -274,22 +314,6 @@ export const sendSinpeTransfer = async (
         console.log(`⚠️ Respuesta SINPE inesperada del banco ${receiverBankCode}:`, result);
         throw new Error(`Respuesta inválida del banco ${receiverBankCode}. Esperaba ACK/NACK pero recibí status: ${resultData.status}`);
       }
-
-      return {
-        id: Date.now(),
-        from_account_id: fromAccount?.id,
-        to_account_id: null,
-        amount: new Decimal(amount),
-        currency,
-        description: comment ?? `Transferencia SINPE a ${receiverPhone} (${subscription.sinpe_client_name})`,
-        status: "completed",
-        external_transfer: true,
-        receiver_bank: receiverBankCode,
-        receiver_phone: receiverPhone,
-        receiver_name: subscription.sinpe_client_name,
-        external_result: result,
-        ack_received: true // Indicador de que recibimos ACK
-      };
 
     } catch (error) {
       console.error("❌ Error enviando transferencia externa:", error);
@@ -330,19 +354,37 @@ export const processSinpeMovilIncoming = async (
     throw new Error(`La cuenta destino es en ${toAccount.currency}, pero la transferencia es en ${currency}.`);
   }
 
-  // Para transferencias SINPE entrantes, solo acreditamos al receptor
-  // No necesitamos crear cuentas del sistema
+  // Crear o buscar cuenta del sistema para transferencias SINPE externas
+  const systemAccount = await prismaSinpe.accounts.findUnique({
+    where: { number: `SYS-SINPE-EXT` },
+  }) || await prismaSinpe.accounts.create({
+    data: {
+      number: `SYS-SINPE-EXT`,
+      currency: currency,
+      balance: new Decimal(999999999),
+    },
+  });
+
+  // Registrar la transferencia SINPE entrante en la tabla transfers
+  const transferRecord = await prismaSinpe.transfers.create({
+    data: {
+      from_account_id: systemAccount.id,
+      to_account_id: toAccount.id,
+      amount: new Decimal(amount),
+      currency: currency,
+      status: "completed",
+      description: `SINPE from ${senderPhone}`.substring(0, 20),
+    },
+  });
+
+  // Acreditar fondos al receptor
   await prismaSinpe.accounts.update({
     where: { id: toAccount.id },
     data: { balance: { increment: new Decimal(amount) } },
   });
 
   console.log(`💰 Fondos acreditados a la cuenta ${toAccount.number}: ${amount} ${currency}`);
-
-  // Para cumplir con el esquema de Prisma, no registramos la transferencia en la tabla
-  // Ya que requiere ambos from_account_id y to_account_id
-  // En su lugar, solo retornamos la información del procesamiento
-
+  console.log(`📝 Transferencia SINPE entrante registrada con ID: ${transferRecord.id}`);
   console.log(`✅ Transferencia SINPE Móvil entrante completada para ${toAccount.number}`);
 
   return {
@@ -350,6 +392,7 @@ export const processSinpeMovilIncoming = async (
     amount_credited: amount,
     currency,
     status: "completed",
+    transfer_id: transferRecord.id,
     message: `Transferencia SINPE desde ${senderPhone} procesada exitosamente`
   };
 };
