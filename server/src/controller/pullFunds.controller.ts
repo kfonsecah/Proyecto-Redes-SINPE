@@ -12,31 +12,25 @@ const httpsAgent = new https.Agent({
     rejectUnauthorized: false
 });
 
-interface PullFundsRequest {
-    account_number: string;
-    cedula: string;
-    monto: number;
-    bancoDestino: {
-        codigo: string;
-        ip: string;
-        puerto: string;
-    };
-    localAccountNumber: string;
-}
-
 export const sendPullFundsRequest = async (req: Request, res: Response) => {
-    const { account_number, cedula, monto, bancoDestino, localAccountNumber }: PullFundsRequest = req.body;
+    const { account_number, cedula, monto, bancoDestino, localAccountNumber } = req.body;
 
-    if (!account_number || !cedula || !monto || !bancoDestino || !localAccountNumber) {
-        return res.status(400).json({ error: 'Faltan datos requeridos' });
+    if (!account_number || !cedula || !monto || !bancoDestino) {
+        return res.status(400).json({ error: 'Faltan datos' });
     }
 
-    const url = `https://${bancoDestino.ip}:${bancoDestino.puerto}/api/pull-funds`;
-    console.log(`🌐 Enviando solicitud pull funds a ${bancoDestino.ip} en puerto ${bancoDestino.puerto}`);
-    console.log(`📋 Datos:`, { account_number, cedula, monto });
+    // Obtener URL del banco desde bank.json
+    const bankUrl = banks[bancoDestino.codigo];
+    if (!bankUrl) {
+        return res.status(400).json({ error: `Banco ${bancoDestino.codigo} no registrado` });
+    }
+
+    const url = `${bankUrl}/api/pull-funds`;
+    console.log(`Enviando solicitud pull funds a ${bankUrl}`);
+    console.log(`Datos: ${JSON.stringify({ account_number, cedula, monto })}`);
 
     try {
-        const response = await fetch(url, {
+        const respuesta = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -47,69 +41,35 @@ export const sendPullFundsRequest = async (req: Request, res: Response) => {
             agent: httpsAgent
         });
 
-        const data = await response.json();
+        const data = await respuesta.json();
 
-        if (response.ok) {
-            console.log(`✅ Pull funds exitoso desde ${bancoDestino.codigo}`);
-
-            // Buscar la cuenta local para acreditar los fondos
-            const localAccount = await prisma.accounts.findUnique({
+        if (respuesta.ok) {
+            // Si la respuesta fue exitosa, sumar el saldo a la cuenta local correspondiente
+            const cuentaLocal = await prisma.accounts.findUnique({
                 where: { number: localAccountNumber }
             });
 
-            if (!localAccount) {
-                return res.status(404).json({ error: 'Cuenta local no encontrada' });
+            if (cuentaLocal) {
+                const nuevoSaldo = Number(cuentaLocal.balance) + parseFloat(monto);
+                await prisma.accounts.update({
+                    where: { number: localAccountNumber },
+                    data: { balance: new Decimal(nuevoSaldo) }
+                });
+                console.log(`💰 Saldo actualizado: ${localAccountNumber} - Nuevo saldo: ${nuevoSaldo}`);
             }
-
-            // Acreditar los fondos a la cuenta local
-            await prisma.accounts.update({
-                where: { number: localAccountNumber },
-                data: {
-                    balance: { increment: new Decimal(monto) }
-                }
-            });
-
-            // Registrar la transacción como crédito entrante
-            await prisma.transfers.create({
-                data: {
-                    from_account_id: 0, // Cuenta externa
-                    to_account_id: localAccount.id,
-                    amount: new Decimal(monto),
-                    currency: localAccount.currency,
-                    status: "completed",
-                    description: `Pull from ${bancoDestino.codigo}`.substring(0, 20),
-                },
-            });
-
-            console.log(`💰 Fondos acreditados: ₡${monto} a cuenta ${localAccountNumber}`);
-
-            return res.status(200).json({
-                success: true,
-                message: `Fondos transferidos exitosamente desde ${bancoDestino.codigo}`,
-                amount: monto,
-                newBalance: Number(localAccount.balance) + monto,
-                externalResponse: data
-            });
-        } else {
-            console.log(`❌ Error en pull funds desde ${bancoDestino.codigo}:`, data);
-            return res.status(400).json({
-                error: 'Error en la solicitud pull funds',
-                details: data
-            });
         }
-    } catch (error: any) {
-        console.error(`❌ Error enviando pull funds a ${bancoDestino.codigo}:`, error.message);
+
+        return res.status(respuesta.ok ? 200 : 400).json(data);
+    } catch (err: any) {
         return res.status(500).json({
             error: 'Error al enviar la solicitud pull funds',
-            details: error.message
+            detalle: err.message
         });
     }
 };
 
 export const handlePullFundsRequest = async (req: Request, res: Response) => {
     const { account_number, cedula, monto } = req.body;
-
-    console.log(`📥 Recibiendo solicitud pull funds:`, { account_number, cedula, monto });
 
     if (!account_number || !cedula || !monto) {
         return res.status(400).json({ error: 'Faltan datos requeridos' });
@@ -132,7 +92,7 @@ export const handlePullFundsRequest = async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Cuenta no encontrada' });
         }
 
-        // Verificar que la cédula coincida con algún usuario asociado a la cuenta
+        // Verificar que la cédula coincida (simple verificación)
         const userWithCedula = account.user_accounts.find(ua =>
             ua.users.phone === cedula || ua.users.email.includes(cedula)
         );
@@ -159,18 +119,6 @@ export const handlePullFundsRequest = async (req: Request, res: Response) => {
             data: {
                 balance: { decrement: new Decimal(monto) }
             }
-        });
-
-        // Registrar la transacción como débito saliente
-        await prisma.transfers.create({
-            data: {
-                from_account_id: account.id,
-                to_account_id: 0, // Cuenta externa
-                amount: new Decimal(monto),
-                currency: account.currency,
-                status: "completed",
-                description: `Pull to external`.substring(0, 20),
-            },
         });
 
         console.log(`💸 Pull funds procesado: ₡${monto} desde cuenta ${account_number}`);

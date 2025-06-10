@@ -6,7 +6,8 @@ export const createUser = async (
   name: string,
   email: string,
   phone: string,
-  password: string
+  password: string,
+  nationalId: string
 ) => {
   const exists = await prisma.users.findUnique({ where: { email } });
 
@@ -30,6 +31,7 @@ export const createUser = async (
       email,
       phone,
       password_hash,
+      national_id: nationalId,
     },
   });
 
