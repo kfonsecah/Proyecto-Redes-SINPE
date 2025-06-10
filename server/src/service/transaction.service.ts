@@ -137,6 +137,12 @@ export const processInternalTransfer = async (transaction: TransferPayload) => {
   const { sender, receiver, amount } = transaction;
 
   console.log("🏠 Procesando transferencia interna");
+  console.log(`💰 DEBUG - Datos de transferencia:`, {
+    fromAccount: sender.account_number,
+    toAccount: receiver.account_number,
+    amount: amount.value,
+    currency: amount.currency
+  });
 
   const from = await prisma.accounts.findUnique({
     where: { number: sender.account_number! },
@@ -154,9 +160,38 @@ export const processInternalTransfer = async (transaction: TransferPayload) => {
     throw new Error("Moneda no coincide con las cuentas.");
   }
 
-  if (from.balance < new Decimal(amount.value)) {
-    throw new Error("Fondos insuficientes.");
+  // MEJORAR VALIDACIÓN DE FONDOS CON MANEJO CORRECTO DE DECIMALES
+  let currentBalance: number;
+
+  // Manejar diferentes tipos de balance (Decimal o number)
+  if (from.balance instanceof Decimal) {
+    currentBalance = from.balance.toNumber();
+  } else if (typeof from.balance === 'string') {
+    currentBalance = parseFloat(from.balance);
+  } else {
+    currentBalance = Number(from.balance);
   }
+
+  const transferAmount = typeof amount.value === 'string' ? parseFloat(amount.value) : Number(amount.value);
+
+  console.log(`💰 VALIDACIÓN DE FONDOS TRANSFERENCIA NORMAL:`);
+  console.log(`   - Cuenta origen: ${from.number}`);
+  console.log(`   - Balance actual: ${currentBalance} ${amount.currency}`);
+  console.log(`   - Monto a transferir: ${transferAmount} ${amount.currency}`);
+  console.log(`   - Balance tipo: ${typeof currentBalance}`);
+  console.log(`   - Amount tipo: ${typeof transferAmount}`);
+  console.log(`   - Fondos suficientes: ${currentBalance >= transferAmount}`);
+
+  // Validación más robusta de fondos
+  if (isNaN(currentBalance) || isNaN(transferAmount)) {
+    throw new Error("Error en la conversión de montos. Contacte al administrador.");
+  }
+
+  if (currentBalance < transferAmount) {
+    throw new Error(`Fondos insuficientes. Balance: ₡${currentBalance.toLocaleString()} | Requerido: ₡${transferAmount.toLocaleString()}`);
+  }
+
+  console.log(`✅ Fondos suficientes validados correctamente para transferencia normal`);
 
   await ensureCurrencyExists(amount.currency);
 
@@ -204,8 +239,33 @@ export const processOutgoingDebit = async (transaction: TransferPayload) => {
     throw new Error("Moneda no coincide con la cuenta origen.");
   }
 
-  if (from.balance < new Decimal(amount.value)) {
-    throw new Error("Fondos insuficientes.");
+  // APLICAR EL MISMO FIX DE VALIDACIÓN DE FONDOS
+  let currentBalance: number;
+
+  // Manejar diferentes tipos de balance (Decimal o number)
+  if (from.balance instanceof Decimal) {
+    currentBalance = from.balance.toNumber();
+  } else if (typeof from.balance === 'string') {
+    currentBalance = parseFloat(from.balance);
+  } else {
+    currentBalance = Number(from.balance);
+  }
+
+  const transferAmount = typeof amount.value === 'string' ? parseFloat(amount.value) : Number(amount.value);
+
+  console.log(`💰 VALIDACIÓN DE FONDOS TRANSFERENCIA EXTERNA:`);
+  console.log(`   - Cuenta origen: ${from.number}`);
+  console.log(`   - Balance actual: ${currentBalance} ${amount.currency}`);
+  console.log(`   - Monto a transferir: ${transferAmount} ${amount.currency}`);
+  console.log(`   - Fondos suficientes: ${currentBalance >= transferAmount}`);
+
+  // Validación más robusta de fondos
+  if (isNaN(currentBalance) || isNaN(transferAmount)) {
+    throw new Error("Error en la conversión de montos. Contacte al administrador.");
+  }
+
+  if (currentBalance < transferAmount) {
+    throw new Error(`Fondos insuficientes. Balance: ₡${currentBalance.toLocaleString()} | Requerido: ₡${transferAmount.toLocaleString()}`);
   }
 
   await ensureCurrencyExists(amount.currency);
