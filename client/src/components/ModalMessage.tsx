@@ -10,6 +10,7 @@ import {
   User,
   Building2
 } from "lucide-react";
+import { formatCurrency } from "../utils/formatCurrency";
 
 interface Transaction {
   type: "credit" | "debit";
@@ -36,15 +37,6 @@ interface Props {
 
 const AccountModal: React.FC<Props> = ({ isOpen, data, username, onClose }) => {
   if (!isOpen || !data) return null;
-
-  const getCurrencySymbol = (currency: string) => {
-    switch (currency) {
-      case 'USD': return '$';
-      case 'EUR': return '€';
-      case 'GBP': return '£';
-      default: return '₡';
-    }
-  };
 
   return (
     <AnimatePresence>
@@ -157,7 +149,7 @@ const AccountModal: React.FC<Props> = ({ isOpen, data, username, onClose }) => {
                         <TrendingUp className="w-5 h-5 text-green-600" />
                       </div>
                       <p className="text-3xl font-bold text-green-700">
-                        {getCurrencySymbol(data.currency)}{data.registeredBalance.toLocaleString()}
+                        {formatCurrency(data.registeredBalance, data.currency)}
                       </p>
                     </div>
 
@@ -167,7 +159,7 @@ const AccountModal: React.FC<Props> = ({ isOpen, data, username, onClose }) => {
                         <TrendingUp className="w-5 h-5 text-blue-600" />
                       </div>
                       <p className="text-3xl font-bold text-blue-700">
-                        {getCurrencySymbol(data.currency)}{data.calculatedBalance.toLocaleString()}
+                        {formatCurrency(data.calculatedBalance, data.currency)}
                       </p>
                     </div>
                   </motion.div>
@@ -197,8 +189,8 @@ const AccountModal: React.FC<Props> = ({ isOpen, data, username, onClose }) => {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center space-x-4">
                                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${tx.type === "credit"
-                                    ? "bg-green-100 text-green-600"
-                                    : "bg-red-100 text-red-600"
+                                  ? "bg-green-100 text-green-600"
+                                  : "bg-red-100 text-red-600"
                                   }`}>
                                   {tx.type === "credit" ? (
                                     <TrendingUp className="w-6 h-6" />
@@ -226,7 +218,7 @@ const AccountModal: React.FC<Props> = ({ isOpen, data, username, onClose }) => {
                                 <p className={`text-lg font-bold ${tx.type === "credit" ? "text-green-700" : "text-red-700"
                                   }`}>
                                   {tx.type === "credit" ? "+" : "-"}
-                                  {getCurrencySymbol(tx.currency)}{tx.amount.toLocaleString()}
+                                  {formatCurrency(tx.amount, tx.currency)}
                                 </p>
                                 <p className="text-sm text-gray-500">{tx.currency}</p>
                               </div>

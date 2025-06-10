@@ -3,12 +3,12 @@ import { motion } from "framer-motion";
 import {
   ArrowRightLeft,
   CreditCard,
-  User,
   Building2,
   DollarSign,
   AlertCircle,
-  CheckCircle
+  Users,
 } from "lucide-react";
+import { formatCurrency } from "../utils/formatCurrency";
 
 interface Account {
   id: string;
@@ -44,7 +44,6 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
   const [toAccount, setToAccount] = useState(
     subscribedAccounts[0]?.number || ""
   );
-  const [toName, setToName] = useState("");
   const [manualAccount, setManualAccount] = useState("");
   const [manualName, setManualName] = useState("");
   const [bankName, setBankName] = useState("");
@@ -52,6 +51,28 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
   const [currency, setCurrency] = useState("CRC");
   const [description, setDescription] = useState("");
   const API_URL = import.meta.env.VITE_API_URL;
+
+  // Función para obtener el nombre del banco basado en el código
+  const getBankName = (bankCode: string): string => {
+    const bankNames: Record<string, string> = {
+      "152": "NovaBank (Local)",
+      "241": "Banco Nacional",
+      "151": "Banco Popular",
+      "161": "BCR",
+      "111": "Banco Davivienda",
+      "876": "Banco Promerica",
+      "223": "BAC San José",
+    };
+    return bankNames[bankCode] || `Banco ${bankCode}`;
+  };
+
+  // Función para extraer código del banco del IBAN
+  const getBankCodeFromIban = (iban: string): string => {
+    if (iban.length >= 8) {
+      return iban.substring(5, 8); // Posiciones 5-7 (0-indexed)
+    }
+    return "";
+  };
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -77,41 +98,59 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
 
   useEffect(() => {
     if (fromAccount) {
-      localStorage.setItem("bankFromTransfer", fromAccount.slice(5, 8));
-      console.log("Bank code saved:", fromAccount.slice(5, 8));
+      const bankCode = fromAccount.slice(5, 8);
+      localStorage.setItem("bankFromTransfer", bankCode);
+      console.log("Bank code saved:", bankCode);
     }
   }, [fromAccount]);
 
   useEffect(() => {
     const buscarNombre = async () => {
-      const banco = manualAccount.slice(5, 8); // obtiene posiciones 5–7
-      console.log(banco);
-      console.log(manualAccount);
-      localStorage.setItem("bankToTransfer", manualAccount.slice(5, 8));
+      if (!manualAccount.trim() || manualAccount.length < 8) {
+        setManualName("");
+        setBankName("");
+        return;
+      }
+
+      const banco = getBankCodeFromIban(manualAccount);
+      const nombreBanco = getBankName(banco);
+
+      console.log("🏦 Código de banco detectado:", banco);
+      console.log("🏪 Nombre del banco:", nombreBanco);
+
+      localStorage.setItem("bankToTransfer", banco);
+      setBankName(nombreBanco);
 
       if (banco !== "152") {
-        setManualName("Cuenta de otro banco");
-        return;
+        // Banco externo
+        setManualName("Titular de cuenta externa");
+        console.log("✅ Transferencia a banco externo configurada");
       } else {
+        // Banco local - buscar nombre del titular
         try {
           const res = await fetch(`${API_URL}/accounts/owner/${manualAccount}`);
-          if (!res.ok) throw new Error("No encontrada");
+          if (!res.ok) throw new Error("Cuenta no encontrada");
           const data = await res.json();
-          setManualName(data.name || "Desconocido");
-        } catch {
-          setManualName("Desconocido");
+          setManualName(data.name || "Titular desconocido");
+          console.log("✅ Titular de cuenta local encontrado:", data.name);
+        } catch (error) {
+          console.error("❌ Error buscando titular:", error);
+          setManualName("Titular no encontrado");
         }
       }
     };
 
     if (!useSubscribed && manualAccount.trim()) {
       buscarNombre();
+    } else {
+      setBankName("");
     }
   }, [manualAccount, useSubscribed, API_URL]);
 
   const selectedAccount = accounts.find((acc) => acc.number === fromAccount);
   const amountNumber = Number(amount);
-  const isValidAmount = amountNumber > 0 && amountNumber <= (selectedAccount?.balance ?? 0);
+  const isValidAmount =
+    amountNumber > 0 && amountNumber <= (selectedAccount?.balance ?? 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,7 +229,10 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
                   const acc = accounts.find((a) => a.number === e.target.value);
                   setFromAccount(e.target.value);
                   if (acc) setCurrency(acc.currency);
-                  localStorage.setItem("bankFromTransfer", fromAccount.slice(5, 8));
+                  localStorage.setItem(
+                    "bankFromTransfer",
+                    fromAccount.slice(5, 8)
+                  );
                 }}
                 className="input-modern w-full focus-ring"
               >
@@ -209,10 +251,10 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
                 >
                   <p className="text-sm text-blue-700">
                     <strong>Saldo disponible:</strong>{" "}
-                    {selectedAccount.balance.toLocaleString("es-CR", {
-                      style: "currency",
-                      currency: selectedAccount.currency,
-                    })}
+                    {formatCurrency(
+                      selectedAccount.balance,
+                      selectedAccount.currency
+                    )}
                   </p>
                 </motion.div>
               )}
@@ -232,7 +274,9 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
               {/* Opciones de radio modernizadas */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <motion.label
-                  className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${useSubscribed ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                  className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${useSubscribed
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300"
                     }`}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -245,19 +289,28 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
                     className="sr-only"
                   />
                   <div className="flex items-center justify-center flex-col">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${useSubscribed ? 'bg-blue-500' : 'bg-gray-300'
-                      }`}>
-                      <User className={`w-4 h-4 ${useSubscribed ? 'text-white' : 'text-gray-600'}`} />
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${useSubscribed ? "bg-blue-500" : "bg-gray-300"
+                        }`}
+                    >
+                      <Users
+                        className={`w-4 h-4 ${useSubscribed ? "text-white" : "text-gray-600"
+                          }`}
+                      />
                     </div>
-                    <span className={`text-sm font-medium ${useSubscribed ? 'text-blue-700' : 'text-gray-600'
-                      }`}>
+                    <span
+                      className={`text-sm font-medium ${useSubscribed ? "text-blue-700" : "text-gray-600"
+                        }`}
+                    >
                       Cuenta Suscrita
                     </span>
                   </div>
                 </motion.label>
 
                 <motion.label
-                  className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${!useSubscribed ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                  className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${!useSubscribed
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300"
                     }`}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -270,12 +323,19 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
                     className="sr-only"
                   />
                   <div className="flex items-center justify-center flex-col">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${!useSubscribed ? 'bg-blue-500' : 'bg-gray-300'
-                      }`}>
-                      <Building2 className={`w-4 h-4 ${!useSubscribed ? 'text-white' : 'text-gray-600'}`} />
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${!useSubscribed ? "bg-blue-500" : "bg-gray-300"
+                        }`}
+                    >
+                      <Building2
+                        className={`w-4 h-4 ${!useSubscribed ? "text-white" : "text-gray-600"
+                          }`}
+                      />
                     </div>
-                    <span className={`text-sm font-medium ${!useSubscribed ? 'text-blue-700' : 'text-gray-600'
-                      }`}>
+                    <span
+                      className={`text-sm font-medium ${!useSubscribed ? "text-blue-700" : "text-gray-600"
+                        }`}
+                    >
                       Cuenta Manual
                     </span>
                   </div>
@@ -284,7 +344,7 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
 
               {/* Campos de destino */}
               <motion.div
-                key={useSubscribed ? 'subscribed' : 'manual'}
+                key={useSubscribed ? "subscribed" : "manual"}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
@@ -297,7 +357,7 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
                       const selected = subscribedAccounts.find(
                         (acc) => acc.number === e.target.value
                       );
-                      if (selected) setToName(selected.name);
+                      if (selected) setManualName(selected.name);
                     }}
                     className="input-modern w-full focus-ring"
                     required
@@ -314,8 +374,10 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
                     <input
                       type="text"
                       value={manualAccount}
-                      onChange={(e) => setManualAccount(e.target.value)}
-                      placeholder="Número de cuenta destino"
+                      onChange={(e) =>
+                        setManualAccount(e.target.value.toUpperCase())
+                      }
+                      placeholder="Ej: CR2415200001234567890"
                       className="input-modern w-full focus-ring"
                       required
                     />
@@ -326,17 +388,43 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
                       placeholder="Nombre del destinatario"
                       className="input-modern w-full focus-ring"
                       required
+                      readOnly={getBankCodeFromIban(manualAccount) !== "152"}
                     />
-                    {bankName && (
+
+                    {/* Mostrar información del banco detectado */}
+                    {manualAccount.length >= 8 && (
                       <motion.div
-                        className="p-3 bg-green-50 rounded-xl border border-green-200"
+                        className={`p-3 rounded-xl border ${getBankCodeFromIban(manualAccount) === "152"
+                          ? "bg-green-50 border-green-200"
+                          : "bg-blue-50 border-blue-200"
+                          }`}
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                       >
-                        <p className="text-sm text-green-700">
-                          <CheckCircle className="inline w-4 h-4 mr-1" />
-                          <strong>Banco:</strong> {bankName}
-                        </p>
+                        <div className="flex items-center">
+                          <Building2
+                            className={`w-4 h-4 mr-2 ${getBankCodeFromIban(manualAccount) === "152"
+                              ? "text-green-700"
+                              : "text-blue-700"
+                              }`}
+                          />
+                          <div>
+                            <p
+                              className={`text-sm font-medium ${getBankCodeFromIban(manualAccount) === "152"
+                                ? "text-green-700"
+                                : "text-blue-700"
+                                }`}
+                            >
+                              <strong>Banco detectado:</strong> {bankName}
+                            </p>
+                            {getBankCodeFromIban(manualAccount) !== "152" && (
+                              <p className="text-xs text-blue-600 mt-1">
+                                🌐 Transferencia externa - Se procesará vía red
+                                interbancaria
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </motion.div>
                     )}
                   </div>
@@ -375,7 +463,7 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
                   step="0.01"
                 />
               </div>
-              {!isValidAmount && (
+              {!isValidAmount && amount && (
                 <motion.div
                   className="mt-3 p-3 bg-red-50 rounded-xl border border-red-200"
                   initial={{ opacity: 0, scale: 0.95 }}

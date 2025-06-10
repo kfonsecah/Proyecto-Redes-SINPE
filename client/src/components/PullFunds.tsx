@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Download, CreditCard, User, DollarSign, Phone, Building2 } from "lucide-react";
+import { formatCurrency } from "../utils/formatCurrency";
 
 interface Account {
     id: string;
@@ -113,8 +114,8 @@ const PullFunds: React.FC = () => {
 
             const data = await response.json();
 
-            if (response.ok) {
-                setMessage(`✅ Fondos transferidos exitosamente: ₡${amount} desde ${externalBankName}`);
+            if (response.ok && data.status === "ACK") {
+                setMessage(`✅ Fondos transferidos exitosamente: ${formatCurrency(Number(amount), selectedAccount?.currency || 'CRC')} desde ${externalBankName}`);
                 setMessageType("success");
 
                 // Limpiar formulario
@@ -198,7 +199,7 @@ const PullFunds: React.FC = () => {
                             >
                                 {accounts.map((acc) => (
                                     <option key={acc.id} value={acc.number}>
-                                        {acc.number} ({acc.currency}) - ₡{acc.balance.toLocaleString()}
+                                        {acc.number} ({acc.currency}) - {formatCurrency(acc.balance, acc.currency)}
                                     </option>
                                 ))}
                             </select>

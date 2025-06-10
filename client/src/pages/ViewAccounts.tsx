@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Wallet
 } from "lucide-react";
+import { formatCurrency } from "../utils/formatCurrency";
 import AccountModal from "../components/ModalMessage";
 
 interface Transaction {
@@ -84,15 +85,6 @@ const ViewAccounts: React.FC = () => {
       case 'EUR': return <Euro className="w-5 h-5" />;
       case 'GBP': return <PoundSterling className="w-5 h-5" />;
       default: return <span className="font-bold text-sm">₡</span>;
-    }
-  };
-
-  const getCurrencySymbol = (currency: string) => {
-    switch (currency) {
-      case 'USD': return '$';
-      case 'EUR': return '€';
-      case 'GBP': return '£';
-      default: return '₡';
     }
   };
 
@@ -180,7 +172,7 @@ const ViewAccounts: React.FC = () => {
                 <div>
                   <p className="text-gray-600 text-sm font-medium">Patrimonio Total</p>
                   <p className="text-3xl font-bold text-green-600">
-                    ₡{getTotalBalance().toLocaleString()}
+                    {formatCurrency(getTotalBalance(), 'CRC')}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -260,7 +252,7 @@ const ViewAccounts: React.FC = () => {
                   <div className="mb-2">
                     <p className="text-sm text-gray-500">Saldo disponible</p>
                     <p className="text-2xl font-bold text-green-600">
-                      {getCurrencySymbol(acc.currency)}{acc.balance.toLocaleString()}
+                      {formatCurrency(acc.balance, acc.currency)}
                     </p>
                   </div>
 

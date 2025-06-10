@@ -10,6 +10,7 @@ import {
   MessageSquare
 } from "lucide-react";
 import ModalMessage from "./modal";
+import { formatCurrency } from "../utils/formatCurrency";
 
 interface Account {
   id: string;
@@ -141,7 +142,7 @@ const SinpeTransferForm: React.FC<Props> = ({ onContinue }) => {
     console.log("   - ¿Fondos suficientes?:", selectedAccount.balance >= amountNumber);
 
     if (amountNumber > selectedAccount.balance) {
-      alert(`Fondos insuficientes. Saldo disponible: ₡${selectedAccount.balance.toLocaleString()} | Requerido: ₡${amountNumber.toLocaleString()}`);
+      alert(`Fondos insuficientes. Saldo disponible: ${formatCurrency(selectedAccount.balance, selectedAccount.currency)} | Requerido: ${formatCurrency(amountNumber, selectedAccount.currency)}`);
       return;
     }
 
@@ -225,7 +226,7 @@ const SinpeTransferForm: React.FC<Props> = ({ onContinue }) => {
                 >
                   <p className="text-sm text-purple-700">
                     <strong>Saldo disponible:</strong>{" "}
-                    ₡{selectedAccount.balance.toLocaleString()}
+                    {formatCurrency(selectedAccount.balance, selectedAccount.currency)}
                   </p>
                 </motion.div>
               )}
