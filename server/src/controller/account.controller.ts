@@ -93,10 +93,14 @@ export const getAccountTransactionDetails = async (
   req: Request,
   res: Response
 ) => {
-  const { number } = req.params;
+  const { user, account } = req.query;
+
+  if (!account || !user) {
+    return res.status(400).json({ error: "Se requieren los parámetros user y account." });
+  }
 
   try {
-    const result = await accountService.getAccountWithTransfers(number);
+    const result = await accountService.getAccountWithTransfers(account as string);
 
     if (!result) {
       return res.status(404).json({ error: "Cuenta no encontrada." });

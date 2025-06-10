@@ -254,9 +254,9 @@ export const sendSinpeTransfer = async (
 
       const result = await response.json();
 
-      // Validar que recibimos el ACK esperado para SINPE Móvil
-      const resultData = result as { status: string; transaction_id: string };
-      if (resultData.status === "ACK" && resultData.transaction_id === payload_firmado.transaction_id) {
+      // Validar respuesta del banco externo - similar a las transferencias bancarias
+      const resultData = result as { status: string; message?: string };
+      if (resultData.status === "ACK") {
         console.log(`✅ ACK SINPE Móvil recibido del banco ${receiverBankCode}:`, result);
 
         // SOLO AHORA descontar fondos del emisor (después de confirmar ACK)
@@ -267,9 +267,12 @@ export const sendSinpeTransfer = async (
         });
         console.log(`💸 Fondos descontados de la cuenta ${fromAccount.number}: ${amount} ${currency}`);
 
+      } else if (resultData.status === "NACK") {
+        console.log(`❌ NACK SINPE Móvil recibido del banco ${receiverBankCode}:`, result);
+        throw new Error(`Transferencia SINPE rechazada por el banco ${receiverBankCode}: ${resultData.message || 'Sin mensaje de error'}`);
       } else {
         console.log(`⚠️ Respuesta SINPE inesperada del banco ${receiverBankCode}:`, result);
-        throw new Error(`Respuesta inválida del banco ${receiverBankCode}. Esperaba ACK pero recibí: ${JSON.stringify(result)}`);
+        throw new Error(`Respuesta inválida del banco ${receiverBankCode}. Esperaba ACK/NACK pero recibí status: ${resultData.status}`);
       }
 
       return {

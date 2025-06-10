@@ -21,7 +21,7 @@ router.get("/accounts/all", (req, res, next) => {
 router.get("/accounts/owner/:number", (req, res, next) => {
   Promise.resolve(getAccountOwnerName(req, res)).catch(next);
 });
-router.get("/accounts/:number/details", (req, res, next) => {
+router.get("/accounts/details", (req, res, next) => {
   Promise.resolve(getAccountTransactionDetails(req, res)).catch(next);
 });
 

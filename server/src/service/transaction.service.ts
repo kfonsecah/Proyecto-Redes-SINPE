@@ -203,6 +203,7 @@ export const processInternalTransfer = async (transaction: TransferPayload) => {
         amount: new Decimal(amount.value),
         currency: amount.currency,
         status: "completed",
+        description: transaction.description?.substring(0, 20) || "Internal transfer",
       },
     }),
     prisma.accounts.update({
@@ -223,7 +224,7 @@ export const processInternalTransfer = async (transaction: TransferPayload) => {
 };
 
 export const processOutgoingDebit = async (transaction: TransferPayload) => {
-  const { sender, amount } = transaction;
+  const { sender, receiver, amount } = transaction;
 
   console.log("💸 Validando fondos para débito saliente:", sender.account_number);
 
@@ -270,14 +271,32 @@ export const processOutgoingDebit = async (transaction: TransferPayload) => {
 
   await ensureCurrencyExists(amount.currency);
 
-  // NO descontar fondos aquí - solo validar
+  // Crear o buscar cuenta del sistema para transferencias externas
+  const systemAccount = await getOrCreateSystemAccount(
+    `SYS-EXT-${getBankCode(receiver.account_number)}`,
+    amount.currency
+  );
+
+  // Registrar la transferencia externa saliente como pendiente
+  const transferRecord = await prisma.transfers.create({
+    data: {
+      from_account_id: from.id,
+      to_account_id: systemAccount.id,
+      amount: new Decimal(amount.value),
+      currency: amount.currency,
+      status: "pending",
+      description: `To ${getBankCode(receiver.account_number)}`,
+    },
+  });
+
+  console.log(`📝 Transferencia externa saliente registrada con ID: ${transferRecord.id}`);
   console.log("✅ Fondos suficientes validados - pendiente de confirmación externa");
 
-  return from; // Retornar la cuenta para usar después
+  return { from, transferRecord }; // Retornar tanto la cuenta como el registro
 };
 
 export const processIncomingCredit = async (transaction: TransferPayload) => {
-  const { receiver, amount } = transaction;
+  const { sender, receiver, amount } = transaction;
 
   console.log("💰 Procesando crédito entrante:", receiver.account_number);
 
@@ -291,6 +310,24 @@ export const processIncomingCredit = async (transaction: TransferPayload) => {
 
   await ensureCurrencyExists(amount.currency);
 
+  // Crear o buscar cuenta del sistema para transferencias externas (usar el banco del sender)
+  const systemAccount = await getOrCreateSystemAccount(
+    `SYS-EXT-${sender.bank_code}`,
+    amount.currency
+  );
+
+  // Registrar la transferencia externa entrante como completada
+  const transferRecord = await prisma.transfers.create({
+    data: {
+      from_account_id: systemAccount.id,
+      to_account_id: to.id,
+      amount: new Decimal(amount.value),
+      currency: amount.currency,
+      status: "completed",
+      description: `From ${sender.bank_code}`,
+    },
+  });
+
   await prisma.accounts.update({
     where: { id: to.id },
     data: {
@@ -298,6 +335,7 @@ export const processIncomingCredit = async (transaction: TransferPayload) => {
     },
   });
 
+  console.log(`📝 Transferencia externa entrante registrada con ID: ${transferRecord.id}`);
   console.log("✅ Crédito entrante procesado");
 };
 
@@ -326,14 +364,17 @@ const sendToExternalBank = async (
 
   const result = await response.json();
 
-  // Validar que recibimos el ACK esperado
-  const resultData = result as { status: string; transaction_id: string };
-  if (resultData.status === "ACK" && resultData.transaction_id === transaction.transaction_id) {
+  // Solo validar que el status sea ACK, sin importar el resto de la estructura
+  const resultData = result as { status: string; message?: string };
+  if (resultData.status === "ACK") {
     console.log(`✅ ACK recibido del banco ${bankCode}:`, result);
     return result;
+  } else if (resultData.status === "NACK") {
+    console.log(`❌ NACK recibido del banco ${bankCode}:`, result);
+    throw new Error(`Transferencia rechazada por el banco ${bankCode}: ${resultData.message || 'Sin mensaje de error'}`);
   } else {
     console.log(`⚠️ Respuesta inesperada del banco ${bankCode}:`, result);
-    throw new Error(`Respuesta inválida del banco ${bankCode}. Esperaba ACK pero recibí: ${JSON.stringify(result)}`);
+    throw new Error(`Respuesta inválida del banco ${bankCode}. Esperaba ACK/NACK pero recibí status: ${resultData.status}`);
   }
 };
 
@@ -355,7 +396,7 @@ export const routeTransfer = async (transaction: TransferPayload) => {
     console.log("📍 Caso: Transferencia saliente");
 
     // Solo validar fondos, NO descontar aún
-    const fromAccount = await processOutgoingDebit(transaction);
+    const { from, transferRecord } = await processOutgoingDebit(transaction);
 
     try {
       // Enviar al banco externo y esperar ACK
@@ -363,10 +404,16 @@ export const routeTransfer = async (transaction: TransferPayload) => {
 
       // Solo AHORA descontar los fondos después de confirmar ACK
       await prisma.accounts.update({
-        where: { id: fromAccount.id },
+        where: { id: from.id },
         data: {
           balance: { decrement: new Decimal(transaction.amount.value) },
         },
+      });
+
+      // Actualizar el estado de la transferencia a completada
+      await prisma.transfers.update({
+        where: { id: transferRecord.id },
+        data: { status: "completed" },
       });
 
       console.log(`💸 Fondos descontados después de ACK confirmado: ${transaction.amount.value} ${transaction.amount.currency}`);
