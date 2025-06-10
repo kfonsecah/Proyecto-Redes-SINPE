@@ -1,4 +1,14 @@
 import React, { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  ArrowRightLeft,
+  CreditCard,
+  User,
+  Building2,
+  DollarSign,
+  AlertCircle,
+  CheckCircle
+} from "lucide-react";
 
 interface Account {
   id: string;
@@ -34,8 +44,10 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
   const [toAccount, setToAccount] = useState(
     subscribedAccounts[0]?.number || ""
   );
+  const [toName, setToName] = useState("");
   const [manualAccount, setManualAccount] = useState("");
   const [manualName, setManualName] = useState("");
+  const [bankName, setBankName] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("CRC");
   const [description, setDescription] = useState("");
@@ -135,160 +147,283 @@ const TransferForm: React.FC<Props> = ({ subscribedAccounts, onSubmit }) => {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-6 max-w-xl mx-auto bg-white p-8 rounded-xl shadow-lg"
-    >
-      <h2 className="text-2xl font-bold text-blue-800 text-center">
-        Realizar Transferencia
-      </h2>
-
-      {/* Cuenta origen */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Cuenta origen
-        </label>
-        <select
-          value={fromAccount}
-          onChange={(e) => {
-            const acc = accounts.find((a) => a.number === e.target.value);
-            setFromAccount(e.target.value);
-            if (acc) setCurrency(acc.currency);
-            localStorage.setItem("bankFromTransfer", fromAccount.slice(5, 8));
-            console.log("Bank code saved:", fromAccount.slice(5, 8));
-          }}
-          className="w-full rounded-md border-gray-300 px-4 py-3 text-base shadow-sm focus:ring-blue-500 focus:border-blue-500"
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 p-6">
+      <div className="container-modern max-w-2xl mx-auto">
+        <motion.div
+          className="card-modern p-8"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
         >
-          {accounts.map((acc) => (
-            <option key={acc.id} value={acc.number}>
-              {acc.number}
-            </option>
-          ))}
-        </select>
-        {selectedAccount && (
-          <p className="text-sm text-gray-500 mt-1">
-            Saldo disponible:{" "}
-            {selectedAccount.balance.toLocaleString("es-CR", {
-              style: "currency",
-              currency: selectedAccount.currency,
-            })}
-          </p>
-        )}
-      </div>
-
-      {/* Destino */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Destino
-        </label>
-        <div className="flex items-center gap-4">
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="radio"
-              name="destino"
-              checked={useSubscribed}
-              onChange={() => setUseSubscribed(true)}
-            />
-            Suscrita
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="radio"
-              name="destino"
-              checked={!useSubscribed}
-              onChange={() => setUseSubscribed(false)}
-            />
-            Manual
-          </label>
-        </div>
-
-        {useSubscribed ? (
-          <div className="mt-2">
-            <select
-              value={toAccount}
-              onChange={(e) => setToAccount(e.target.value)}
-              className="w-full mt-1 rounded-md border-gray-300 px-4 py-3 text-base shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            >
-              {subscribedAccounts.map((s) => (
-                <option key={s.number} value={s.number}>
-                  {s.number} – {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="mt-2">
-            <input
-              type="text"
-              placeholder="Número de cuenta"
-              value={manualAccount}
-              onChange={(e) => setManualAccount(e.target.value)}
-              className="w-full rounded-md border-gray-300 px-4 py-3 text-base shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            {manualAccount.slice(5, 8) === "152" && manualName && (
-              <p className="text-sm text-gray-500 mt-1">
-                Titular: <span className="font-semibold">{manualName}</span>
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Monto y moneda */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Monto
-        </label>
-        <div className="flex gap-2">
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="rounded-md border-gray-300 px-3 py-2 text-sm shadow-sm focus:ring-blue-500 focus:border-blue-500"
+          {/* Header del formulario */}
+          <motion.div
+            className="text-center mb-8"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
           >
-            <option value="CRC">₡</option>
-            <option value="USD">$</option>
-            <option value="EUR">€</option>
-          </select>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Monto"
-            className="flex-1 rounded-md border-gray-300 px-4 py-3 text-base shadow-sm focus:ring-blue-500 focus:border-blue-500"
-            required
-            min={0.01}
-            step="0.01"
-          />
-        </div>
-        {!isValidAmount && (
-          <p className="text-sm text-red-600 mt-1">
-            El monto excede el saldo disponible.
-          </p>
-        )}
-      </div>
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-primary rounded-2xl mb-4 shadow-lg">
+              <ArrowRightLeft className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              Nueva Transferencia
+            </h2>
+            <p className="text-gray-600">
+              Envía dinero de forma segura e instantánea
+            </p>
+          </motion.div>
 
-      {/* Comentario */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Comentario (opcional)
-        </label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Ej: Pago de factura, préstamo, etc."
-          className="w-full rounded-md border-gray-300 px-4 py-3 text-base shadow-sm focus:ring-blue-500 focus:border-blue-500 resize-none"
-          rows={3}
-        />
-      </div>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Cuenta origen */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                <CreditCard className="inline w-4 h-4 mr-2" />
+                Cuenta origen
+              </label>
+              <select
+                value={fromAccount}
+                onChange={(e) => {
+                  const acc = accounts.find((a) => a.number === e.target.value);
+                  setFromAccount(e.target.value);
+                  if (acc) setCurrency(acc.currency);
+                  localStorage.setItem("bankFromTransfer", fromAccount.slice(5, 8));
+                }}
+                className="input-modern w-full focus-ring"
+              >
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.number}>
+                    {acc.number} ({acc.currency})
+                  </option>
+                ))}
+              </select>
+              {selectedAccount && (
+                <motion.div
+                  className="mt-3 p-3 bg-blue-50 rounded-xl border border-blue-200"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <p className="text-sm text-blue-700">
+                    <strong>Saldo disponible:</strong>{" "}
+                    {selectedAccount.balance.toLocaleString("es-CR", {
+                      style: "currency",
+                      currency: selectedAccount.currency,
+                    })}
+                  </p>
+                </motion.div>
+              )}
+            </motion.div>
 
-      <button
-        type="submit"
-        className="w-full bg-blue-600 text-white font-semibold py-3 rounded-md hover:bg-blue-700 transition text-base"
-      >
-        Realizar Transferencia
-      </button>
-    </form>
+            {/* Destino */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                <Building2 className="inline w-4 h-4 mr-2" />
+                Destino
+              </label>
+
+              {/* Opciones de radio modernizadas */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <motion.label
+                  className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${useSubscribed ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <input
+                    type="radio"
+                    name="destino"
+                    checked={useSubscribed}
+                    onChange={() => setUseSubscribed(true)}
+                    className="sr-only"
+                  />
+                  <div className="flex items-center justify-center flex-col">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${useSubscribed ? 'bg-blue-500' : 'bg-gray-300'
+                      }`}>
+                      <User className={`w-4 h-4 ${useSubscribed ? 'text-white' : 'text-gray-600'}`} />
+                    </div>
+                    <span className={`text-sm font-medium ${useSubscribed ? 'text-blue-700' : 'text-gray-600'
+                      }`}>
+                      Cuenta Suscrita
+                    </span>
+                  </div>
+                </motion.label>
+
+                <motion.label
+                  className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${!useSubscribed ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <input
+                    type="radio"
+                    name="destino"
+                    checked={!useSubscribed}
+                    onChange={() => setUseSubscribed(false)}
+                    className="sr-only"
+                  />
+                  <div className="flex items-center justify-center flex-col">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${!useSubscribed ? 'bg-blue-500' : 'bg-gray-300'
+                      }`}>
+                      <Building2 className={`w-4 h-4 ${!useSubscribed ? 'text-white' : 'text-gray-600'}`} />
+                    </div>
+                    <span className={`text-sm font-medium ${!useSubscribed ? 'text-blue-700' : 'text-gray-600'
+                      }`}>
+                      Cuenta Manual
+                    </span>
+                  </div>
+                </motion.label>
+              </div>
+
+              {/* Campos de destino */}
+              <motion.div
+                key={useSubscribed ? 'subscribed' : 'manual'}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {useSubscribed ? (
+                  <select
+                    value={toAccount}
+                    onChange={(e) => {
+                      setToAccount(e.target.value);
+                      const selected = subscribedAccounts.find(
+                        (acc) => acc.number === e.target.value
+                      );
+                      if (selected) setToName(selected.name);
+                    }}
+                    className="input-modern w-full focus-ring"
+                    required
+                  >
+                    <option value="">Selecciona una cuenta suscrita</option>
+                    {subscribedAccounts.map((acc) => (
+                      <option key={acc.number} value={acc.number}>
+                        {acc.name} - {acc.number}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="space-y-4">
+                    <input
+                      type="text"
+                      value={manualAccount}
+                      onChange={(e) => setManualAccount(e.target.value)}
+                      placeholder="Número de cuenta destino"
+                      className="input-modern w-full focus-ring"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={manualName}
+                      onChange={(e) => setManualName(e.target.value)}
+                      placeholder="Nombre del destinatario"
+                      className="input-modern w-full focus-ring"
+                      required
+                    />
+                    {bankName && (
+                      <motion.div
+                        className="p-3 bg-green-50 rounded-xl border border-green-200"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                      >
+                        <p className="text-sm text-green-700">
+                          <CheckCircle className="inline w-4 h-4 mr-1" />
+                          <strong>Banco:</strong> {bankName}
+                        </p>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+
+            {/* Monto */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                <DollarSign className="inline w-4 h-4 mr-2" />
+                Monto a transferir
+              </label>
+              <div className="flex gap-3">
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="input-modern rounded-xl px-4 py-3 min-w-[100px] focus-ring"
+                >
+                  <option value="CRC">₡ CRC</option>
+                  <option value="USD">$ USD</option>
+                  <option value="EUR">€ EUR</option>
+                </select>
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="input-modern flex-1 focus-ring"
+                  required
+                  min={0.01}
+                  step="0.01"
+                />
+              </div>
+              {!isValidAmount && (
+                <motion.div
+                  className="mt-3 p-3 bg-red-50 rounded-xl border border-red-200"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                >
+                  <p className="text-sm text-red-700">
+                    <AlertCircle className="inline w-4 h-4 mr-1" />
+                    El monto excede el saldo disponible
+                  </p>
+                </motion.div>
+              )}
+            </motion.div>
+
+            {/* Comentario */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                Comentario (opcional)
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ej: Pago de factura, préstamo, etc."
+                className="input-modern w-full resize-none focus-ring"
+                rows={3}
+              />
+            </motion.div>
+
+            {/* Botón de envío */}
+            <motion.button
+              type="submit"
+              className="btn-primary-modern w-full py-4 text-lg font-semibold"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <ArrowRightLeft className="inline w-5 h-5 mr-2" />
+              Realizar Transferencia
+            </motion.button>
+          </form>
+        </motion.div>
+      </div>
+    </div>
   );
 };
 
