@@ -259,18 +259,23 @@ export const sendSinpeTransfer = async (
       if (resultData.status === "ACK") {
         console.log(`✅ ACK SINPE Móvil recibido del banco ${receiverBankCode}:`, result);
 
-        // Crear o buscar cuenta del sistema para transferencias SINPE externas
-        const systemAccount = await prismaSinpe.accounts.findUnique({
-          where: { number: `SYS-SINPE-EXT-${receiverBankCode}` },
-        }) || await prismaSinpe.accounts.create({
-          data: {
-            number: `SYS-SINPE-EXT-${receiverBankCode}`,
-            currency: currency,
-            balance: new Decimal(999999999),
-          },
+        // Buscar o crear cuenta del sistema fija para transferencias SINPE externas
+        let systemAccount = await prismaSinpe.accounts.findFirst({
+          where: { number: "SYS-EXTERNAL" },
         });
 
-        // Registrar la transferencia SINPE saliente en la tabla transfers
+        if (!systemAccount) {
+          systemAccount = await prismaSinpe.accounts.create({
+            data: {
+              number: "SYS-EXTERNAL",
+              currency: currency,
+              balance: new Decimal(999999999),
+            },
+          });
+          console.log(`📝 Cuenta del sistema creada: SYS-EXTERNAL con ID: ${systemAccount.id}`);
+        }
+
+        // Registrar la transferencia SINPE saliente usando la cuenta del sistema
         const transferRecord = await prismaSinpe.transfers.create({
           data: {
             from_account_id: fromAccount.id,
@@ -354,18 +359,23 @@ export const processSinpeMovilIncoming = async (
     throw new Error(`La cuenta destino es en ${toAccount.currency}, pero la transferencia es en ${currency}.`);
   }
 
-  // Crear o buscar cuenta del sistema para transferencias SINPE externas
-  const systemAccount = await prismaSinpe.accounts.findUnique({
-    where: { number: `SYS-SINPE-EXT` },
-  }) || await prismaSinpe.accounts.create({
-    data: {
-      number: `SYS-SINPE-EXT`,
-      currency: currency,
-      balance: new Decimal(999999999),
-    },
+  // Buscar o crear cuenta del sistema fija para transferencias SINPE entrantes
+  let systemAccount = await prismaSinpe.accounts.findFirst({
+    where: { number: "SYS-EXTERNAL" },
   });
 
-  // Registrar la transferencia SINPE entrante en la tabla transfers
+  if (!systemAccount) {
+    systemAccount = await prismaSinpe.accounts.create({
+      data: {
+        number: "SYS-EXTERNAL",
+        currency: currency,
+        balance: new Decimal(999999999),
+      },
+    });
+    console.log(`📝 Cuenta del sistema creada: SYS-EXTERNAL con ID: ${systemAccount.id}`);
+  }
+
+  // Registrar la transferencia SINPE entrante usando la cuenta del sistema
   const transferRecord = await prismaSinpe.transfers.create({
     data: {
       from_account_id: systemAccount.id,

@@ -271,11 +271,21 @@ export const processOutgoingDebit = async (transaction: TransferPayload) => {
 
   await ensureCurrencyExists(amount.currency);
 
-  // Crear o buscar cuenta del sistema para transferencias externas
-  const systemAccount = await getOrCreateSystemAccount(
-    `SYS-EXT-${getBankCode(receiver.account_number)}`,
-    amount.currency
-  );
+  // Buscar o crear cuenta del sistema fija para transferencias externas
+  let systemAccount = await prisma.accounts.findFirst({
+    where: { number: "SYS-EXTERNAL" },
+  });
+
+  if (!systemAccount) {
+    systemAccount = await prisma.accounts.create({
+      data: {
+        number: "SYS-EXTERNAL",
+        currency: amount.currency,
+        balance: new Decimal(999999999),
+      },
+    });
+    console.log(`📝 Cuenta del sistema creada: SYS-EXTERNAL con ID: ${systemAccount.id}`);
+  }
 
   // Registrar la transferencia externa saliente como pendiente
   const transferRecord = await prisma.transfers.create({
@@ -292,7 +302,7 @@ export const processOutgoingDebit = async (transaction: TransferPayload) => {
   console.log(`📝 Transferencia externa saliente registrada con ID: ${transferRecord.id}`);
   console.log("✅ Fondos suficientes validados - pendiente de confirmación externa");
 
-  return { from, transferRecord }; // Retornar tanto la cuenta como el registro
+  return { from, transferRecord };
 };
 
 export const processIncomingCredit = async (transaction: TransferPayload) => {
@@ -310,11 +320,21 @@ export const processIncomingCredit = async (transaction: TransferPayload) => {
 
   await ensureCurrencyExists(amount.currency);
 
-  // Crear o buscar cuenta del sistema para transferencias externas (usar el banco del sender)
-  const systemAccount = await getOrCreateSystemAccount(
-    `SYS-EXT-${sender.bank_code}`,
-    amount.currency
-  );
+  // Buscar o crear cuenta del sistema fija para transferencias externas
+  let systemAccount = await prisma.accounts.findFirst({
+    where: { number: "SYS-EXTERNAL" },
+  });
+
+  if (!systemAccount) {
+    systemAccount = await prisma.accounts.create({
+      data: {
+        number: "SYS-EXTERNAL",
+        currency: amount.currency,
+        balance: new Decimal(999999999),
+      },
+    });
+    console.log(`📝 Cuenta del sistema creada: SYS-EXTERNAL con ID: ${systemAccount.id}`);
+  }
 
   // Registrar la transferencia externa entrante como completada
   const transferRecord = await prisma.transfers.create({

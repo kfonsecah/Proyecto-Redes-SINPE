@@ -9,6 +9,7 @@ import Transferencia from "./Transferencia";
 import CreateUser from "./CreateUser";
 import PhoneLink from "./PhoneLink";
 import SinpeTransfer from "./SinpeTransfer";
+import PullFunds from "./PullFunds";
 
 export interface Account {
   id: string;
@@ -46,6 +47,12 @@ export const Layout: React.FC = () => {
       label: "Transferencias",
       title: "Realizar transferencia",
       content: <Transferencia />,
+    },
+    {
+      id: "pull-funds",
+      label: "Traer Fondos",
+      title: "Traer dinero de cuentas en otros bancos",
+      content: <PullFunds />,
     },
     {
       id: "Suscripcion a Numero",

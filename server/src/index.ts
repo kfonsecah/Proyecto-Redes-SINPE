@@ -12,6 +12,7 @@ import externalRoutes from "./routes/external.routes";
 import messageRoutes from "./routes/messages.routes";
 import phoneLinkRoutes from "./routes/phoneLink.routes";
 import sinpeRoutes from "./routes/sinpe.routes";
+import pullFundsRoutes from "./routes/pullFunds.routes";
 
 const app = express();
 const HTTP_PORT = 3001;
@@ -43,6 +44,7 @@ app.use("/api", externalRoutes);
 app.use("/api", messageRoutes);
 app.use("/api", phoneLinkRoutes);
 app.use("/api", sinpeRoutes);
+app.use("/api", pullFundsRoutes);
 
 // Endpoint de salud para verificar conectividad entre bancos
 app.get("/api/health", (req, res) => {
