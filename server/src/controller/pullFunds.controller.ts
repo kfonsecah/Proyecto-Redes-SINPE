@@ -65,7 +65,37 @@ export const sendPullFundsRequest = async (req: Request, res: Response) => {
                     where: { number: localAccountNumber },
                     data: { balance: new Decimal(nuevoSaldo) }
                 });
+
+                // 🚨 CREAR REGISTRO DE TRANSACCIÓN PARA PULL FUNDS RECIBIDOS
+                // Buscar o crear cuenta del sistema para pull funds
+                let systemAccount = await prisma.accounts.findFirst({
+                    where: { number: "SYS-PULL-FUNDS" },
+                });
+
+                if (!systemAccount) {
+                    systemAccount = await prisma.accounts.create({
+                        data: {
+                            number: "SYS-PULL-FUNDS",
+                            currency: cuentaLocal.currency,
+                            balance: new Decimal(999999999),
+                        },
+                    });
+                    console.log(`📝 Cuenta del sistema pull funds creada: SYS-PULL-FUNDS con ID: ${systemAccount.id}`);
+                }
+
+                await prisma.transfers.create({
+                    data: {
+                        from_account_id: systemAccount.id, // Usar cuenta del sistema válida
+                        to_account_id: cuentaLocal.id,
+                        amount: new Decimal(monto),
+                        currency: cuentaLocal.currency,
+                        description: `Pull Funds desde banco ${bancoDestino.codigo} - Cuenta ${account_number}`,
+                        status: "completed"
+                    }
+                });
+
                 console.log(`💰 Saldo actualizado: ${localAccountNumber} - Nuevo saldo: ₡${nuevoSaldo.toLocaleString()}`);
+                console.log(`📝 Transacción de pull funds registrada`);
             }
 
             return res.status(200).json({
@@ -184,7 +214,36 @@ export const handlePullFundsRequest = async (req: Request, res: Response) => {
             }
         });
 
+        // 🚨 CREAR REGISTRO DE TRANSACCIÓN PARA PULL FUNDS ENVIADOS
+        // Buscar o crear cuenta del sistema para pull funds
+        let systemAccount = await prisma.accounts.findFirst({
+            where: { number: "SYS-PULL-FUNDS" },
+        });
+
+        if (!systemAccount) {
+            systemAccount = await prisma.accounts.create({
+                data: {
+                    number: "SYS-PULL-FUNDS",
+                    currency: account.currency,
+                    balance: new Decimal(999999999),
+                },
+            });
+            console.log(`📝 Cuenta del sistema pull funds creada: SYS-PULL-FUNDS con ID: ${systemAccount.id}`);
+        }
+
+        await prisma.transfers.create({
+            data: {
+                from_account_id: account.id,
+                to_account_id: systemAccount.id, // Usar cuenta del sistema válida
+                amount: new Decimal(monto),
+                currency: account.currency,
+                description: `Pull Funds solicitado por banco externo - Autorizado por ${userWithCedula.users.name}`,
+                status: "completed"
+            }
+        });
+
         console.log(`💸 Pull funds procesado exitosamente: ₡${requestedAmount.toLocaleString()} desde cuenta ${account_number}`);
+        console.log(`📝 Transacción de débito registrada`);
         console.log(`📊 Nuevo saldo: ₡${(currentBalance - requestedAmount).toLocaleString()}`);
 
         return res.status(200).json({

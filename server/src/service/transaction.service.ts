@@ -459,4 +459,65 @@ export const routeTransfer = async (transaction: TransferPayload) => {
 
 // Compatibilidad
 export const processTransfer = processInternalTransfer;
-export const createExternalCredit = processIncomingCredit;
+export const createExternalCredit = async (transactionData: any) => {
+  const { receiver, amount, currency, description } = transactionData;
+
+  console.log("💰 Procesando crédito externo:", transactionData);
+
+  // Buscar cuenta receptora
+  const account = await prisma.accounts.findUnique({
+    where: { number: receiver.account_number },
+    include: {
+      user_accounts: {
+        include: {
+          users: true
+        }
+      }
+    }
+  });
+
+  if (!account) {
+    throw new Error("Cuenta receptora no encontrada");
+  }
+
+  // Buscar o crear cuenta del sistema fija para transferencias externas
+  let systemAccount = await prisma.accounts.findFirst({
+    where: { number: "SYS-EXTERNAL" },
+  });
+
+  if (!systemAccount) {
+    systemAccount = await prisma.accounts.create({
+      data: {
+        number: "SYS-EXTERNAL",
+        currency: amount.currency,
+        balance: new Decimal(999999999),
+      },
+    });
+    console.log(`📝 Cuenta del sistema creada: SYS-EXTERNAL con ID: ${systemAccount.id}`);
+  }
+
+  // 🚨 CREAR REGISTRO DE TRANSFERENCIA PARA CRÉDITO EXTERNO
+  const transfer = await prisma.transfers.create({
+    data: {
+      from_account_id: systemAccount.id,
+      to_account_id: account.id,
+      amount: new Decimal(amount.value),
+      currency: amount.currency,
+      description: description || "Transferencia externa recibida",
+      status: "completed",
+    },
+  });
+
+  // Actualizar saldo
+  await prisma.accounts.update({
+    where: { id: account.id },
+    data: {
+      balance: { increment: new Decimal(amount.value) },
+    },
+  });
+
+  console.log(`✅ Crédito externo completado: ${amount.value} ${amount.currency} a cuenta ${account.number}`);
+  console.log(`📝 Transferencia registrada con ID: ${transfer.id}`);
+
+  return transfer;
+};
