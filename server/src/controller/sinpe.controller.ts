@@ -201,3 +201,55 @@ export const validatePhone = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
+export const handleSinpeTransferWithAccount = async (req: Request, res: Response) => {
+  try {
+    const { senderPhone, receiverPhone, amount, currency, comment, fromAccount } = req.body;
+
+    console.log(`🎯 SINPE con cuenta específica - Datos recibidos:`);
+    console.log(`   - Teléfono remitente: ${senderPhone}`);
+    console.log(`   - Teléfono receptor: ${receiverPhone}`);
+    console.log(`   - Cuenta origen seleccionada: ${fromAccount}`);
+    console.log(`   - Monto: ${amount} ${currency}`);
+
+    // Validar campos obligatorios
+    if (!senderPhone || !receiverPhone || !amount || !fromAccount) {
+      return res.status(400).json({
+        error: "Faltan datos: senderPhone, receiverPhone, amount, fromAccount son requeridos"
+      });
+    }
+
+    const amountValue = typeof amount === 'string' ? parseFloat(amount) : amount;
+
+    if (isNaN(amountValue) || amountValue <= 0) {
+      return res.status(400).json({ error: "El monto debe ser un número válido mayor a 0." });
+    }
+
+    // 🚨 Usar la nueva función con cuenta específica
+    const transfer = await sendSinpeTransfer(
+      senderPhone,
+      receiverPhone,
+      amountValue,
+      currency || "CRC",
+      comment,
+      fromAccount // 🎯 Pasar la cuenta específica seleccionada
+    );
+
+    console.log(`✅ Transferencia SINPE completada desde cuenta ${fromAccount}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Transferencia SINPE procesada exitosamente",
+      transfer_id: (transfer as any)?.id || (transfer as any)?.transaction_id || "completed",
+      from_account: fromAccount,
+      amount: amountValue,
+      currency: currency || "CRC"
+    });
+
+  } catch (error: any) {
+    console.error("❌ Error en transferencia SINPE con cuenta específica:", error.message);
+    res.status(500).json({
+      error: error.message || "Error al procesar transferencia SINPE."
+    });
+  }
+};

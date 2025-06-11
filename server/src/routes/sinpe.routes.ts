@@ -4,6 +4,7 @@ import {
   handleSinpeTransfer,
   validatePhone,
   receiveSinpeMovilTransfer,
+  handleSinpeTransferWithAccount, // 🚨 NUEVA IMPORTACIÓN
 } from "../controller/sinpe.controller";
 
 const router = Router();
@@ -34,6 +35,14 @@ router.get(
   "/sinpe/user-link/:username",
   (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(checkUserSinpeLink(req, res)).catch(next);
+  }
+);
+
+// 🚨 NUEVA RUTA para transferencias con cuenta específica
+router.post(
+  "/sinpe-transfer-from-account",
+  (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(handleSinpeTransferWithAccount(req, res)).catch(next);
   }
 );
 

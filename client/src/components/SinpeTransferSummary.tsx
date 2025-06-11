@@ -39,54 +39,28 @@ const SinpeTransferSummary: React.FC<Props> = ({
     setError(null);
 
     const user = JSON.parse(localStorage.getItem("user") || "{}");
-    const bank_Receiver = JSON.parse(
-      localStorage.getItem("receiverInfo") || "{}"
-    );
-    const bank_Sender = localStorage.getItem("senderAccount") || "BANK";
     const sender_phone = localStorage.getItem("senderInfo") || "";
 
+    console.log(`🎯 Enviando SINPE desde cuenta específica: ${transfer?.fromAccount}`);
+
+    // 🚨 USAR LA NUEVA RUTA QUE ACEPTA CUENTA ESPECÍFICA
     const payload = {
-      version: "1.0",
-      timestamp: new Date().toISOString(),
-      transaction_id: uuidv4(),
-      sender: {
-        phone: sender_phone,
-        bank_code: bank_Sender,
-        name: user.name || "Desconocido",
-      },
-      receiver: {
-        phone: transfer?.phone,
-        bank_code: bank_Receiver.bank_code,
-        name: bank_Receiver.name,
-      },
-      amount: {
-        value: transfer?.amount,
-        currency: transfer?.currency,
-      },
-      description: transfer?.comment || "Transferencia SINPE desde app demo",
+      senderPhone: sender_phone,
+      receiverPhone: transfer?.phone,
+      amount: transfer?.amount,
+      currency: transfer?.currency || "CRC",
+      comment: transfer?.comment || "Transferencia SINPE Móvil",
+      fromAccount: transfer?.fromAccount // 🎯 Pasar la cuenta específica seleccionada
     };
 
-    console.log(payload);
+    console.log("📦 Payload con cuenta específica:", payload);
 
     try {
-      const hmacRes = await fetch(`${API_URL}/transactions/hmac`, {
+      // Usar la nueva ruta /sinpe-transfer-from-account
+      const sinpeRes = await fetch(`${API_URL}/sinpe-transfer-from-account`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
-
-      if (!hmacRes.ok) {
-        const errorData = await hmacRes.json().catch(() => ({ error: "Error generando HMAC" }));
-        throw new Error(errorData.error || `Error HTTP ${hmacRes.status}`);
-      }
-
-      const { hmac_md5 } = await hmacRes.json();
-      const finalPayload = { ...payload, hmac_md5 };
-
-      const sinpeRes = await fetch(`${API_URL}/sinpe-movil`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(finalPayload),
       });
 
       if (!sinpeRes.ok) {
@@ -96,20 +70,18 @@ const SinpeTransferSummary: React.FC<Props> = ({
 
       const result = await sinpeRes.json();
 
-      console.log("✅ Transferencia SINPE enviada:", finalPayload);
-      console.log("📬 Respuesta del servidor:", result);
+      console.log("✅ Transferencia SINPE enviada desde cuenta específica:", result);
 
-      if (result.status === "ACK" && result.transaction_id === finalPayload.transaction_id) {
-        console.log("✅ ACK SINPE confirmado - Transferencia exitosa");
+      if (result.success) {
+        console.log(`✅ SINPE exitoso desde cuenta ${result.from_account}`);
         localStorage.removeItem("pendingSinpeTransfer");
         onConfirm();
       } else {
-        console.error("❌ No se recibió ACK válido para SINPE:", result);
-        throw new Error("La transferencia SINPE no fue confirmada por el banco destino");
+        throw new Error(result.error || "La transferencia SINPE no fue procesada correctamente");
       }
 
     } catch (error: any) {
-      console.error("❌ Error al enviar SINPE:", error);
+      console.error("❌ Error al enviar SINPE con cuenta específica:", error);
       setError(error.message);
     } finally {
       setIsLoading(false);

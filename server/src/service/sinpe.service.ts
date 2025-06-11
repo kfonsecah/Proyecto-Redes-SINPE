@@ -64,7 +64,8 @@ export const sendSinpeTransfer = async (
   receiverPhone: string,
   amount: number,
   currency: string,
-  comment?: string
+  comment?: string,
+  specificAccountNumber?: string // 🚨 NUEVO PARÁMETRO para cuenta específica
 ) => {
   // 1. Validar que el número receptor esté registrado en BCCR
   const subscription = await prismaBccr.sinpe_subscriptions.findUnique({
@@ -79,19 +80,48 @@ export const sendSinpeTransfer = async (
 
   // 2. Verificar si es transferencia interna o externa
   const receiverBankCode = subscription.sinpe_bank_code;
-  const LOCAL_BANK_CODE = "152"; // Tu código de banco
+  const LOCAL_BANK_CODE = "152";
   const isInternalTransfer = receiverBankCode === LOCAL_BANK_CODE;
 
   console.log(`🏦 Tipo de transferencia: ${isInternalTransfer ? 'Interna' : 'Externa'} (${LOCAL_BANK_CODE} → ${receiverBankCode})`);
 
-  // 3. Buscar cuenta del emisor y validar fondos CON MEJOR MANEJO
-  const senderLink = await prismaSinpe.phone_links.findUnique({
-    where: { phone: senderPhone },
-  });
-
+  // 3. 🚨 BUSCAR CUENTA ESPECÍFICA O USAR LA VINCULADA AL TELÉFONO
   let fromAccount: any = null;
 
-  if (senderLink) {
+  if (specificAccountNumber) {
+    // Usar la cuenta específica seleccionada por el usuario
+    console.log(`🎯 Usando cuenta específica seleccionada: ${specificAccountNumber}`);
+
+    fromAccount = await prismaSinpe.accounts.findUnique({
+      where: { number: specificAccountNumber },
+    });
+
+    if (!fromAccount) {
+      throw new Error(`La cuenta seleccionada ${specificAccountNumber} no existe.`);
+    }
+
+    // Verificar que el usuario tiene acceso a esta cuenta
+    const senderLink = await prismaSinpe.phone_links.findUnique({
+      where: { phone: senderPhone },
+    });
+
+    if (!senderLink) {
+      throw new Error("Su número no está vinculado a SINPE Móvil.");
+    }
+
+    console.log(`✅ Cuenta específica encontrada: ${fromAccount.number} (Balance: ${fromAccount.balance} ${fromAccount.currency})`);
+  } else {
+    // Usar la cuenta vinculada al teléfono (comportamiento anterior)
+    console.log(`📞 Usando cuenta vinculada al teléfono: ${senderPhone}`);
+
+    const senderLink = await prismaSinpe.phone_links.findUnique({
+      where: { phone: senderPhone },
+    });
+
+    if (!senderLink) {
+      throw new Error("Su número no está vinculado a ninguna cuenta. Configure SINPE Móvil primero.");
+    }
+
     fromAccount = await prismaSinpe.accounts.findUnique({
       where: { number: senderLink.account_number },
     });
@@ -99,47 +129,40 @@ export const sendSinpeTransfer = async (
     if (!fromAccount) {
       throw new Error("La cuenta origen vinculada al número remitente no existe.");
     }
-
-    // MEJORAR MANEJO DE DECIMALES Y VALIDACIÓN
-    let currentBalance: number;
-
-    // Manejar diferentes tipos de balance (Decimal o number)
-    if (fromAccount.balance instanceof Decimal) {
-      currentBalance = fromAccount.balance.toNumber();
-    } else if (typeof fromAccount.balance === 'string') {
-      currentBalance = parseFloat(fromAccount.balance);
-    } else {
-      currentBalance = Number(fromAccount.balance);
-    }
-
-    // Asegurar que amount sea un número válido
-    const transferAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
-
-    console.log(`💰 VALIDACIÓN DE FONDOS:`);
-    console.log(`   - Balance actual: ${currentBalance} ${currency}`);
-    console.log(`   - Monto a enviar: ${transferAmount} ${currency}`);
-    console.log(`   - Balance tipo: ${typeof currentBalance}`);
-    console.log(`   - Amount tipo: ${typeof transferAmount}`);
-    console.log(`   - Fondos suficientes: ${currentBalance >= transferAmount}`);
-
-    // Validación más robusta de fondos
-    if (isNaN(currentBalance) || isNaN(transferAmount)) {
-      throw new Error("Error en la conversión de montos. Contacte al administrador.");
-    }
-
-    if (currentBalance < transferAmount) {
-      throw new Error(`Fondos insuficientes. Balance: ₡${currentBalance.toLocaleString()} | Requerido: ₡${transferAmount.toLocaleString()}`);
-    }
-
-    console.log(`✅ Fondos suficientes validados correctamente`);
-  } else {
-    // Si no hay link, no podemos procesar la transferencia
-    throw new Error("Su número no está vinculado a ninguna cuenta. Configure SINPE Móvil primero.");
   }
 
-  // 4. Procesar según tipo de transferencia
+  // 4. VALIDAR FONDOS EN LA CUENTA CORRECTA
+  let currentBalance: number;
+
+  if (fromAccount.balance instanceof Decimal) {
+    currentBalance = fromAccount.balance.toNumber();
+  } else if (typeof fromAccount.balance === 'string') {
+    currentBalance = parseFloat(fromAccount.balance);
+  } else {
+    currentBalance = Number(fromAccount.balance);
+  }
+
+  const transferAmount = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+
+  console.log(`💰 VALIDACIÓN DE FONDOS EN CUENTA SELECCIONADA:`);
+  console.log(`   - Cuenta origen: ${fromAccount.number}`);
+  console.log(`   - Balance actual: ${currentBalance} ${currency}`);
+  console.log(`   - Monto a enviar: ${transferAmount} ${currency}`);
+  console.log(`   - Fondos suficientes: ${currentBalance >= transferAmount}`);
+
+  if (isNaN(currentBalance) || isNaN(transferAmount)) {
+    throw new Error("Error en la conversión de montos. Contacte al administrador.");
+  }
+
+  if (currentBalance < transferAmount) {
+    throw new Error(`Fondos insuficientes en cuenta ${fromAccount.number}. Balance: ₡${currentBalance.toLocaleString()} | Requerido: ₡${transferAmount.toLocaleString()}`);
+  }
+
+  console.log(`✅ Fondos suficientes validados en cuenta ${fromAccount.number}`);
+
+  // 5. Procesar según tipo de transferencia
   if (isInternalTransfer) {
-    console.log("🏠 Procesando transferencia interna - acreditando al receptor");
+    console.log("🏠 Procesando transferencia SINPE interna - acreditando al receptor");
 
     // Buscar cuenta destino en nuestro banco
     const receiverLink = await prismaSinpe.phone_links.findUnique({
@@ -158,14 +181,14 @@ export const sendSinpeTransfer = async (
       throw new Error("La cuenta destino no existe.");
     }
 
-    // Descontar fondos del emisor usando Decimal para precisión
+    // 🚨 DESCONTAR FONDOS DE LA CUENTA ESPECÍFICA SELECCIONADA
     const transferAmountDecimal = new Decimal(amount);
 
     await prismaSinpe.accounts.update({
-      where: { id: fromAccount.id },
+      where: { id: fromAccount.id }, // 🎯 Usar fromAccount que ya es la cuenta específica
       data: { balance: { decrement: transferAmountDecimal } },
     });
-    console.log(`💸 Fondos descontados de la cuenta ${fromAccount.number}: ${amount} ${currency}`);
+    console.log(`💸 Fondos descontados de la cuenta ESPECÍFICA ${fromAccount.number}: ${amount} ${currency}`);
 
     // Acreditar fondos al receptor
     await prismaSinpe.accounts.update({
@@ -178,18 +201,20 @@ export const sendSinpeTransfer = async (
     // Registrar transferencia interna
     const transfer = await prismaSinpe.transfers.create({
       data: {
-        from_account_id: fromAccount.id,
+        from_account_id: fromAccount.id, // 🎯 Usar la cuenta específica
         to_account_id: toAccount.id,
         amount: transferAmountDecimal,
         currency,
-        description: comment ?? "",
+        description: comment ?? "Transferencia SINPE Móvil",
         status: "completed",
       },
     });
 
+    console.log(`✅ Transferencia SINPE interna completada desde cuenta específica ${fromAccount.number}`);
     return transfer;
+
   } else {
-    console.log("🌐 Procesando transferencia externa - enviando a otro banco");
+    console.log("🌐 Procesando transferencia SINPE externa - enviando a otro banco");
 
     // Construir payload firmado en el formato específico para SINPE Móvil
     const payload_firmado = {
@@ -239,12 +264,11 @@ export const sendSinpeTransfer = async (
 
       console.log(`🌐 Enviando transferencia SINPE a banco ${receiverBankCode}: ${externalBankUrl}`);
 
-      // Usar fetch nativo de Node.js
       const response = await fetch(`${externalBankUrl}/api/sinpe-movil-transfer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(finalPayload),
-        agent: httpsAgent, // Usar el agente HTTPS configurado
+        agent: httpsAgent,
       });
 
       if (!response.ok) {
@@ -254,7 +278,6 @@ export const sendSinpeTransfer = async (
 
       const result = await response.json();
 
-      // Validar respuesta del banco externo - similar a las transferencias bancarias
       const resultData = result as { status: string; message?: string };
       if (resultData.status === "ACK") {
         console.log(`✅ ACK SINPE Móvil recibido del banco ${receiverBankCode}:`, result);
@@ -275,10 +298,10 @@ export const sendSinpeTransfer = async (
           console.log(`📝 Cuenta del sistema creada: SYS-EXTERNAL con ID: ${systemAccount.id}`);
         }
 
-        // Registrar la transferencia SINPE saliente usando la cuenta del sistema
+        // Registrar la transferencia SINPE saliente usando la cuenta específica
         const transferRecord = await prismaSinpe.transfers.create({
           data: {
-            from_account_id: fromAccount.id,
+            from_account_id: fromAccount.id, // 🎯 Usar la cuenta específica seleccionada
             to_account_id: systemAccount.id,
             amount: new Decimal(amount),
             currency: currency,
@@ -287,18 +310,18 @@ export const sendSinpeTransfer = async (
           },
         });
 
-        // SOLO AHORA descontar fondos del emisor (después de confirmar ACK)
+        // 🚨 DESCONTAR FONDOS DE LA CUENTA ESPECÍFICA (después de confirmar ACK)
         const transferAmountDecimal = new Decimal(amount);
         await prismaSinpe.accounts.update({
-          where: { id: fromAccount.id },
+          where: { id: fromAccount.id }, // 🎯 Usar fromAccount que es la cuenta específica
           data: { balance: { decrement: transferAmountDecimal } },
         });
-        console.log(`💸 Fondos descontados de la cuenta ${fromAccount.number}: ${amount} ${currency}`);
-        console.log(`📝 Transferencia SINPE saliente registrada con ID: ${transferRecord.id}`);
+        console.log(`💸 Fondos descontados de la cuenta ESPECÍFICA ${fromAccount.number}: ${amount} ${currency}`);
+        console.log(`📝 Transferencia SINPE externa registrada con ID: ${transferRecord.id}`);
 
         return {
           id: transferRecord.id,
-          from_account_id: fromAccount?.id,
+          from_account_id: fromAccount.id,
           to_account_id: systemAccount.id,
           amount: new Decimal(amount),
           currency,
@@ -309,7 +332,7 @@ export const sendSinpeTransfer = async (
           receiver_phone: receiverPhone,
           receiver_name: subscription?.sinpe_client_name,
           external_result: result,
-          ack_received: true // Indicador de que recibimos ACK
+          ack_received: true
         };
 
       } else if (resultData.status === "NACK") {
@@ -321,7 +344,7 @@ export const sendSinpeTransfer = async (
       }
 
     } catch (error) {
-      console.error("❌ Error enviando transferencia externa:", error);
+      console.error("❌ Error enviando transferencia SINPE externa:", error);
       throw error;
     }
   }

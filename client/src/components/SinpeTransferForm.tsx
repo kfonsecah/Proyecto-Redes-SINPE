@@ -204,16 +204,33 @@ const SinpeTransferForm: React.FC<Props> = ({ onContinue }) => {
               <select
                 value={fromAccount}
                 onChange={(e) => {
-                  const acc = accounts.find((a) => a.number === e.target.value);
-                  setFromAccount(e.target.value);
-                  if (acc) setCurrency(acc.currency);
+                  const selectedAccountNumber = e.target.value;
+                  const acc = accounts.find((a) => a.number === selectedAccountNumber);
+
+                  console.log("🔄 Cambiando cuenta origen SINPE:");
+                  console.log("   - Cuenta anterior:", fromAccount);
+                  console.log("   - Cuenta nueva:", selectedAccountNumber);
+                  console.log("   - Datos de la cuenta:", acc);
+
+                  setFromAccount(selectedAccountNumber);
+
+                  if (acc) {
+                    setCurrency(acc.currency);
+                    console.log("   - Moneda actualizada:", acc.currency);
+                    console.log("   - Saldo disponible:", acc.balance);
+
+                    // Actualizar el localStorage con el nuevo banco
+                    const bankCode = selectedAccountNumber.slice(5, 8);
+                    localStorage.setItem("senderAccount", bankCode);
+                    console.log("   - Código de banco guardado:", bankCode);
+                  }
                 }}
                 className="input-modern w-full focus-ring"
                 required
               >
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.number}>
-                    {acc.number} ({acc.currency})
+                    {acc.number} ({acc.currency}) - {formatCurrency(acc.balance, acc.currency)}
                   </option>
                 ))}
               </select>
@@ -227,6 +244,9 @@ const SinpeTransferForm: React.FC<Props> = ({ onContinue }) => {
                   <p className="text-sm text-purple-700">
                     <strong>Saldo disponible:</strong>{" "}
                     {formatCurrency(selectedAccount.balance, selectedAccount.currency)}
+                  </p>
+                  <p className="text-xs text-purple-600 mt-1">
+                    Cuenta: {selectedAccount.number} • Moneda: {selectedAccount.currency}
                   </p>
                 </motion.div>
               )}
