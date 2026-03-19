@@ -117,41 +117,6 @@ When a transfer targets an account at bank `241`, the server looks up that URL a
 
 ---
 
-## Installation
-
-```bash
-# Clone the repository
-git clone <repository-url>
-
-# Install frontend dependencies
-cd client
-npm install
-
-# Install backend dependencies
-cd ../server
-npm install
-```
-
-Environment variables required in `server/.env`:
-
-```
-DATABASE_URL_SINPE=postgresql://user:password@host:5432/sinpe_db
-DATABASE_URL_BCCR=postgresql://user:password@host:5432/bccr_db
-```
-
-Run the development servers:
-
-```bash
-# Frontend (port 5173)
-cd client && npm run dev
-
-# Backend (ports 3001 HTTP and 3443 HTTPS)
-cd server && npm run dev
-```
-
-The SSL certificate and private key must be placed in `server/ssl/` as `certificate.pem` and `private-key.pem` before the HTTPS server will start.
-
----
 
 ## Known limitations
 
